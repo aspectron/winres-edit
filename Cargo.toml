@@ -9,6 +9,7 @@ categories = ["encoding","windows-apis","parsing"]
 description = """
 Load and modify windows resources in existing executables (.exe or .res)
 """
+
 [dependencies]
 thiserror = "1.0.37"
 manual-serializer = { path="../manual-serializer" }
