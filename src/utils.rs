@@ -59,21 +59,3 @@ pub fn u32slice_to_u8vec(u32slice: &[u32]) -> Vec<u8> {
     u8vec
 }
 
-pub fn u32msls_as_u16vec(ms: u32, ls: u32) -> [u16;4] {
-    [(ms >> 16) as u16, (ms & 0xffff) as u16, (ls >> 16) as u16, (ls & 0xffff) as u16]
-}
-
-pub fn u16vec_to_u32msls(v : &[u16;4], ms: &mut u32, ls: &mut u32) {
-    *ms = (v[0] as u32) << 16 | (v[1] as u32);
-    *ls = (v[2] as u32) << 16 | (v[3] as u32);
-}
-
-
-pub fn format_version_string(v: &[u16;4]) -> String {
-    if v[3] == 0 { 
-        format!("{}.{}.{}",v[0],v[1],v[2]) 
-    } else {
-        format!("{}.{}.{}.{}",v[0],v[1],v[2],v[3]) 
-    }
-
-}

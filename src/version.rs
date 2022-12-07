@@ -3,6 +3,7 @@ use crate::error::Error;
 use crate::result::Result;
 use manual_serializer::*;
 use crate::utils::*;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct Header {
@@ -98,34 +99,92 @@ pub fn try_build_struct(
     Ok(vec)
 }
 
+#[derive(Debug, Clone)]
 pub struct Version([u16;4]);
 
-impl TryDeserialize for Version {
-    type Error = Error;
-    fn try_deserialize(dest:&mut Deserializer) -> Result<Self> {
-        
+impl Default for Version {
+    fn default() -> Self {
+        Version([0,0,0,0])
     }
 }
 
-impl Version {
-
+impl TryDeserialize for Version {
+    type Error = Error;
+    fn try_deserialize(src:&mut Deserializer) -> Result<Self> {
+        let ms = src.try_u32()?;
+        let ls = src.try_u32()?;
+        Ok(Version([(ms >> 16) as u16, (ms & 0xffff) as u16, (ls >> 16) as u16, (ls & 0xffff) as u16]))
+    }
 }
+
+impl TrySerialize for Version {
+    type Error = Error;
+    fn try_serialize(&self, dest:&mut Serializer) -> Result<()> {
+        dest.try_u32((self.0[0] as u32) << 16 | (self.0[1] as u32))?;
+        dest.try_u32((self.0[2] as u32) << 16 | (self.0[3] as u32))?;
+        Ok(())
+    }
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f : &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        if self.0[3] == 0 { 
+            write!(f,"{}.{}.{}",self.0[0],self.0[1],self.0[2])?;
+        } else {
+            write!(f,"{}.{}.{}.{}",self.0[0],self.0[1],self.0[2],self.0[3])?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Date(u64);
+
+impl Default for Date {
+    fn default() -> Self {
+        Date(0)
+    }
+}
+
+impl TryDeserialize for Date {
+    type Error = Error;
+    fn try_deserialize(src:&mut Deserializer) -> Result<Self> {
+        let ms = src.try_u32()? as u64;
+        let ls = src.try_u32()? as u64;
+        Ok(Date(ms << 32 | ls))
+    }
+}
+
+impl TrySerialize for Date {
+    type Error = Error;
+    fn try_serialize(&self, dest:&mut Serializer) -> Result<()> {
+        dest.try_u32((self.0 >> 32) as u32)?;
+        dest.try_u32((self.0 & 0xffffffff) as u32)?;
+        Ok(())
+    }
+}
+
+impl fmt::Display for Date {
+    fn fmt(&self, f : &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        write!(f,"{}",self.0)?;
+        Ok(())
+    }
+}
+
+
 
 #[derive(Debug, Clone)]
 pub struct FileInfo {
     pub signature : u32,
     pub struc_version : u32,
-    pub file_version_ms : u32,
-    pub file_version_ls : u32,
-    pub product_version_ms : u32,
-    pub product_version_ls : u32,
+    pub file_version : Version,
+    pub product_version : Version,
     pub file_flags_mask : u32,
     pub file_flags : u32,
     pub file_os : u32,
     pub file_type : u32,
     pub file_subtype : u32,
-    pub file_date_ms : u32,
-    pub file_date_ls : u32,
+    pub file_date : Date,
 }
 
 impl Default for FileInfo {
@@ -133,17 +192,14 @@ impl Default for FileInfo {
         FileInfo {
             signature: 0xfeef04bd,
             struc_version: 0,
-            file_version_ms: 0,
-            file_version_ls: 0,
-            product_version_ms: 0,
-            product_version_ls: 0,
+            file_version: Version::default(),
+            product_version: Version::default(),
             file_flags_mask: 0,
             file_flags: 0,
             file_os: 0,
             file_type: 0,
             file_subtype: 0,
-            file_date_ms: 0,
-            file_date_ls: 0,
+            file_date: Date::default(),
         }
     }
 }
@@ -152,40 +208,15 @@ impl FileInfo {
     pub fn print(&self) {
         println!("signature: 0x{:x}", self.signature);
         println!("struc_version: 0x{:x}", self.struc_version);
-        println!("file_version_ms: {} (0x{:x})", self.file_version_ms, self.file_version_ms);
-        println!("file_version_ls: {} (0x{:x})", self.file_version_ls, self.file_version_ls);
-        println!("file_version: {:?}", self.get_file_version());
-        println!("product_version_ms: {} (0x{:x})", self.product_version_ms, self.product_version_ms);
-        println!("product_version_ls: {} (0x{:x})", self.product_version_ls, self.product_version_ls);
-        println!("product_version: {:?}", self.get_product_version());
+        println!("file_version: {}", self.file_version);
+        println!("file_version: {:?}", self.file_version);
+        println!("product_version: {}", self.product_version);
         println!("file_flags_mask: 0x{:x}", self.file_flags_mask);
         println!("file_flags: 0x{:x}", self.file_flags);
         println!("file_os: 0x{:x}", self.file_os);
         println!("file_type: 0x{:x}", self.file_type);
         println!("file_subtype: 0x{:x}", self.file_subtype);
-        println!("file_date_ms: {}", self.file_date_ms);
-        println!("file_date_ls: {}", self.file_date_ls);
-    }
-
-    // pub fn test(&mut self) {
-    //     let v = vec![1,2,3,4];
-    //     self.set_file_version(v.as_slice().try_into().unwrap());
-    // }
-
-    pub fn get_file_version(&self) -> [u16;4] {
-        u32msls_as_u16vec(self.file_version_ms, self.file_version_ls)
-    }
-
-    pub fn set_file_version(&mut self, v: &[u16;4]) {
-        u16vec_to_u32msls(v,&mut self.file_version_ms, &mut self.file_version_ls);
-    }
-
-    pub fn get_product_version(&self) -> [u16;4] {
-        u32msls_as_u16vec(self.product_version_ms, self.product_version_ls)
-    }
-    
-    pub fn set_product_version(&mut self, v: &[u16;4]) {
-        u16vec_to_u32msls(v,&mut self.product_version_ms, &mut self.product_version_ls);
+        println!("file_date: {}", self.file_date);
     }
 
 }
@@ -198,17 +229,14 @@ impl TryDeserialize for FileInfo {
         let info = FileInfo {
             signature : src.try_u32()?,
             struc_version : src.try_u32()?,
-            file_version_ms : src.try_u32()?,
-            file_version_ls : src.try_u32()?,
-            product_version_ms : src.try_u32()?,
-            product_version_ls : src.try_u32()?,
+            file_version : src.try_deserialize()?,
+            product_version : src.try_deserialize()?,
             file_flags_mask : src.try_u32()?,
             file_flags : src.try_u32()?,
             file_os : src.try_u32()?,
             file_type : src.try_u32()?,
             file_subtype : src.try_u32()?,
-            file_date_ms : src.try_u32()?,
-            file_date_ls : src.try_u32()?,
+            file_date : src.try_deserialize()?,
         };
 
         if info.signature != 0xfeef04bd {
@@ -222,24 +250,19 @@ impl TryDeserialize for FileInfo {
 impl TrySerialize for FileInfo {
     type Error = Error;
     fn try_serialize(&self, dest: &mut Serializer) -> Result<()> {
-        // let mut dest = Serializer::new(std::mem::size_of::<FileInfo>());
         dest
             .try_u32(self.signature)?
             .try_u32(self.struc_version)?
-            .try_u32(self.file_version_ms)?
-            .try_u32(self.file_version_ls)?
-            .try_u32(self.product_version_ms)?
-            .try_u32(self.product_version_ls)?
+            .try_serialize(&self.file_version)?
+            .try_serialize(&self.product_version)?
             .try_u32(self.file_flags_mask)?
             .try_u32(self.file_flags)?
             .try_u32(self.file_os)?
             .try_u32(self.file_type)?
             .try_u32(self.file_subtype)?
-            .try_u32(self.file_date_ms)?
-            .try_u32(self.file_date_ls)?;
+            .try_serialize(&self.file_date)?;
 
         Ok(())
-            // .to_vec()
     }
 }
 
@@ -265,25 +288,15 @@ impl TrySerialize for VersionInfoChild {
 
         match self {
             VersionInfoChild::StringFileInfo { tables } => {
-
                 for (key_lang,map) in tables {
-
                     let mut lang_records = Serializer::default();
-
                     for (key_record, data) in map {
-
                         let (data_type,data) = match data {
                             Data::Binary(data) => {
-                                (
-                                    DataType::Binary,
-                                    data.clone()
-                                )
+                                (DataType::Binary,data.clone())
                             },
                             Data::Text(text) => {
-                                (
-                                    DataType::Text,
-                                    utf16sz_to_u8vec(text)
-                                )
+                                (DataType::Text,utf16sz_to_u8vec(text))
                             },
                         };
 
@@ -368,9 +381,7 @@ impl TryDeserialize for VersionInfoChild {
                     vars.insert(var_header.key, values);
                 }
 
-                VersionInfoChild::VarFileInfo { 
-                    vars
-                }
+                VersionInfoChild::VarFileInfo { vars }
             },
             _ => return Err(format!("Unknown child type: {}", header.key).into())
         };
@@ -457,20 +468,18 @@ impl VersionInfo {
 
         let version_info = try_build_struct("VS_VERSION_INFO",DataType::Binary,file_info_data.len(),&data)?;
         dest.try_u8slice(&version_info)?;
-        // dest.try_align_u32()?;
-        // dest.try_u8slice(&child_data)?;
 
         Ok(dest.to_vec())
     }
 
     pub fn set_file_version(&mut self, v : &[u16;4]) {
-        self.info.set_file_version(v);
-        self.insert_string("FileVersion", &format_version_string(v))
+        self.info.file_version = Version(*v);
+        self.insert_string("FileVersion", &Version(*v).to_string())
     }
     
     pub fn set_product_version(&mut self, v : &[u16;4]) {
-        self.info.set_product_version(v);
-        self.insert_string("ProductVersion", &format_version_string(v))
+        self.info.product_version = Version(*v);
+        self.insert_string("ProductVersion", &Version(*v).to_string())
     }
 
     pub fn set_version(&mut self, v: &[u16;4]) {
@@ -482,7 +491,7 @@ impl VersionInfo {
         for child in self.children.iter_mut() {
             match child {
                 VersionInfoChild::StringFileInfo { tables } => {
-                    for (lang, table) in tables {
+                    for (_, table) in tables {
                         if let Some(_) = table.get(key) {
                             table.insert(key.to_string(), Data::Text(text.to_string()));
                         }
