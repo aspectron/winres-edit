@@ -99,7 +99,7 @@ pub struct FileInfo {
 impl Default for FileInfo {
     fn default() -> Self {
         FileInfo {
-            signature: 0,
+            signature: 0xfeef04bd,
             struc_version: 0,
             file_version_ms: 0,
             file_version_ls: 0,
@@ -138,7 +138,7 @@ impl TryDeserialize for FileInfo {
             file_date_ls : src.try_u32()?,
         };
 
-        if info.signature != 0xFEEF04BD {
+        if info.signature != 0xfeef04bd {
             return Err(format!("FileInfo: invalid signature 0x{:8x}", info.signature).into());
         }
 
