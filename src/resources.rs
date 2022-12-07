@@ -159,8 +159,10 @@ impl Resource {
 #[derive(Debug)]
 pub struct Resources {
     file : PathBuf,
-    handle : Arc<Mutex<Option<HANDLE>>>,
-    pub list : Arc<Mutex<Vec<Resource>>>,
+    // handle : Arc<Mutex<Option<HANDLE>>>,
+    // pub list : Arc<Mutex<Vec<Resource>>>,
+    handle : Option<HANDLE>,
+    pub list : Vec<Resource>,
 }
 
 impl Resources {
@@ -168,8 +170,8 @@ impl Resources {
     pub fn new(file: &PathBuf) -> Resources {
         Resources {
             file : file.clone(),
-            handle : Arc::new(Mutex::new(None)),
-            list : Arc::new(Mutex::new(Vec::new()))
+            handle : None, //Arc::new(Mutex::new(None)),
+            list : Vec::new(), //Arc::new(Mutex::new(Vec::new()))
         }
     }
 
@@ -201,18 +203,19 @@ impl Resources {
     }
 
     pub fn is_open(&self) -> bool {
-        self.handle.lock().unwrap().is_some()
+        self.handle.is_some()
+        // self.handle.lock().unwrap().is_some()
     }
 
-    pub fn open(&self) -> Result<&Self> {
+    pub fn open(&mut self) -> Result<&Self> {
         self.open_impl(false)
     }
 
-    pub fn open_delete_existing_resources(&self) -> Result<&Self> {
+    pub fn open_delete_existing_resources(&mut self) -> Result<&Self> {
         self.open_impl(true)
     }
 
-    fn open_impl(&self, delete_existing_resources: bool) -> Result<&Self> {
+    fn open_impl(&mut self, delete_existing_resources: bool) -> Result<&Self> {
         if self.is_open() {
             return Err(format!("resource '{}' is already open", self.file.to_str().unwrap()).into());
         }
@@ -225,7 +228,8 @@ impl Resources {
                 delete_existing_resources)?
         };
 
-        self.handle.lock().unwrap().replace(handle);
+        self.handle.replace(handle);
+        // self.handle.lock().unwrap().replace(handle);
         
         Ok(self)
     }
@@ -236,7 +240,8 @@ impl Resources {
     }
 
     pub fn remove_with_args(&self, kind : &Id, name : &Id, lang : u16) -> Result<&Self> {
-        if let Some(handle) = self.handle.lock().unwrap().as_ref() {
+        // if let Some(handle) = self.handle.lock().unwrap().as_ref() {
+        if let Some(handle) = self.handle.as_ref() {
             let success = unsafe { UpdateResourceA(
                 *handle,
                 kind,
@@ -259,7 +264,7 @@ impl Resources {
     }
 
     pub fn replace_with_args(&self, kind : &Id, name : &Id, lang : u16, data : &[u8]) -> Result<&Self> {
-        if let Some(handle) = self.handle.lock().unwrap().as_ref() {
+        if let Some(handle) = self.handle.as_ref() {
             let success = unsafe { UpdateResourceA(
                 *handle,
                 kind,
@@ -281,16 +286,16 @@ impl Resources {
         
     }
 
-    pub fn close(&self) {
-        if let Some(handle) = self.handle.lock().unwrap().take() {
+    pub fn close(&mut self) {
+        if let Some(handle) = self.handle.take() {
             unsafe {
                 EndUpdateResourceA(handle,false);
             };
         }
     }
 
-    pub fn discard(&self) {
-        if let Some(handle) = self.handle.lock().unwrap().take() {
+    pub fn discard(&mut self) {
+        if let Some(handle) = self.handle.take() {
             unsafe {
                 EndUpdateResourceA(handle,true);
             };
@@ -299,11 +304,11 @@ impl Resources {
 
     // pub fn 
     pub fn insert(&mut self, r : Resource) {
-        self.list.lock().unwrap().push(r)
+        self.list.push(r)
     }
 
     pub fn find(&self, typeid : Id, nameid: Id) -> Option<Resource> {
-        for item in self.list.lock().unwrap().iter() {
+        for item in self.list.iter() {
             if item.kind == typeid && item.name == nameid {
                 return Some(item.clone());
             }
