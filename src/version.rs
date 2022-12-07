@@ -452,12 +452,12 @@ impl VersionInfo {
 
     pub fn set_file_version(&mut self, v : &[u16;4]) {
         self.info.set_file_version(v);
-        self.replace_string("FileVersion", &format_version_string(v))
+        self.insert_string("FileVersion", &format_version_string(v))
     }
     
     pub fn set_product_version(&mut self, v : &[u16;4]) {
         self.info.set_product_version(v);
-        self.replace_string("ProductVersion", &format_version_string(v))
+        self.insert_string("ProductVersion", &format_version_string(v))
     }
 
     pub fn set_version(&mut self, v: &[u16;4]) {
@@ -466,6 +466,57 @@ impl VersionInfo {
     }
 
     pub fn replace_string(&mut self, key: &str, text: &str) {
-
+        for child in self.children.iter() {
+            match child {
+                VersionInfoChild::StringFileInfo { tables } => {
+                    for (lang, table) in tables {
+                        if let Some(text) = table.get(key) {
+                            table.insert(key.to_string(), Data::Text(text.to_string()));
+                        }
+                    }
+                },
+                _ => { }
+            }
+        }
     }
+
+    pub fn insert_string(&mut self, key: &str, text: &str) {
+        for child in self.children.iter() {
+            match child {
+                VersionInfoChild::StringFileInfo { tables } => {
+                    for (lang, table) in tables {
+                        table.insert(key.to_string(), Data::Text(text.to_string()));
+                    }
+                },
+                _ => { }
+            }
+        }
+    }
+
+    pub fn remove_string(&mut self, key: &str, text: &str) {
+        for child in self.children.iter() {
+            match child {
+                VersionInfoChild::StringFileInfo { tables } => {
+                    for (lang, table) in tables {
+                        table.remove(key);
+                    }
+                },
+                _ => { }
+            }
+        }
+    }
+
+    pub fn ensure_language(&mut self, lang: &str) {
+        for child in self.children.iter() {
+            match child {
+                VersionInfoChild::StringFileInfo { tables } => {
+                    if tables.get(lang).is_none() {
+                        tables.insert(lang.to_string(), HashMap::new());
+                    }
+                },
+                _ => { }
+            }
+        }
+    }
+    
 }
