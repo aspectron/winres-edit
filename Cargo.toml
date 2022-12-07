@@ -1,0 +1,26 @@
+[package]
+name = "winres-edit"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/aspectron/winres-edit"
+keywords = ["windows", "resources", "icon", "version"]
+categories = ["encoding","windows-apis","parsing"]
+description = """
+Load and modify windows resources in existing executables (.exe or .res)
+"""
+[dependencies]
+thiserror = "1.0.37"
+manual-serializer = { path="../manual-serializer" }
+
+[dependencies.windows]
+version = "0.43.0"
+features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System",
+    "Win32_Security",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+]
