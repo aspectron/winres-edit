@@ -98,6 +98,19 @@ pub fn try_build_struct(
     Ok(vec)
 }
 
+pub struct Version([u16;4]);
+
+impl TryDeserialize for Version {
+    type Error = Error;
+    fn try_deserialize(dest:&mut Deserializer) -> Result<Self> {
+        
+    }
+}
+
+impl Version {
+
+}
+
 #[derive(Debug, Clone)]
 pub struct FileInfo {
     pub signature : u32,
@@ -466,11 +479,11 @@ impl VersionInfo {
     }
 
     pub fn replace_string(&mut self, key: &str, text: &str) {
-        for child in self.children.iter() {
+        for child in self.children.iter_mut() {
             match child {
                 VersionInfoChild::StringFileInfo { tables } => {
                     for (lang, table) in tables {
-                        if let Some(text) = table.get(key) {
+                        if let Some(_) = table.get(key) {
                             table.insert(key.to_string(), Data::Text(text.to_string()));
                         }
                     }
@@ -481,10 +494,10 @@ impl VersionInfo {
     }
 
     pub fn insert_string(&mut self, key: &str, text: &str) {
-        for child in self.children.iter() {
+        for child in self.children.iter_mut() {
             match child {
                 VersionInfoChild::StringFileInfo { tables } => {
-                    for (lang, table) in tables {
+                    for (_, table) in tables {
                         table.insert(key.to_string(), Data::Text(text.to_string()));
                     }
                 },
@@ -493,11 +506,11 @@ impl VersionInfo {
         }
     }
 
-    pub fn remove_string(&mut self, key: &str, text: &str) {
-        for child in self.children.iter() {
+    pub fn remove_string(&mut self, key: &str) {
+        for child in self.children.iter_mut() {
             match child {
                 VersionInfoChild::StringFileInfo { tables } => {
-                    for (lang, table) in tables {
+                    for (_, table) in tables {
                         table.remove(key);
                     }
                 },
@@ -507,7 +520,7 @@ impl VersionInfo {
     }
 
     pub fn ensure_language(&mut self, lang: &str) {
-        for child in self.children.iter() {
+        for child in self.children.iter_mut() {
             match child {
                 VersionInfoChild::StringFileInfo { tables } => {
                     if tables.get(lang).is_none() {
