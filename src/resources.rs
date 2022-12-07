@@ -159,10 +159,10 @@ impl Resource {
 #[derive(Debug)]
 pub struct Resources {
     file : PathBuf,
-    // handle : Arc<Mutex<Option<HANDLE>>>,
-    // pub list : Arc<Mutex<Vec<Resource>>>,
-    handle : Option<HANDLE>,
-    pub list : Vec<Resource>,
+    handle : Arc<Mutex<Option<HANDLE>>>,
+    pub list : Arc<Mutex<Vec<Resource>>>,
+    // handle : Option<HANDLE>,
+    // pub list : Vec<Resource>,
 }
 
 impl Resources {
@@ -170,8 +170,8 @@ impl Resources {
     pub fn new(file: &PathBuf) -> Resources {
         Resources {
             file : file.clone(),
-            handle : None, //Arc::new(Mutex::new(None)),
-            list : Vec::new(), //Arc::new(Mutex::new(Vec::new()))
+            handle : Arc::new(Mutex::new(None)),
+            list : Arc::new(Mutex::new(Vec::new()))
         }
     }
 
@@ -185,7 +185,7 @@ impl Resources {
                 DONT_RESOLVE_DLL_REFERENCES | LOAD_LIBRARY_AS_DATAFILE
             )?;
 
-            let ptr : *mut Resources = std::mem::transmute(&self);
+            let ptr : *const Resources = std::mem::transmute(&*self);
             let success = EnumResourceTypesA(
                 handle,
                 Some(enum_types),
@@ -203,8 +203,8 @@ impl Resources {
     }
 
     pub fn is_open(&self) -> bool {
-        self.handle.is_some()
-        // self.handle.lock().unwrap().is_some()
+        // self.handle.is_some()
+        self.handle.lock().unwrap().is_some()
     }
 
     pub fn open(&mut self) -> Result<&Self> {
@@ -228,7 +228,7 @@ impl Resources {
                 delete_existing_resources)?
         };
 
-        self.handle.replace(handle);
+        self.handle.lock().unwrap().replace(handle);
         // self.handle.lock().unwrap().replace(handle);
         
         Ok(self)
@@ -241,7 +241,7 @@ impl Resources {
 
     pub fn remove_with_args(&self, kind : &Id, name : &Id, lang : u16) -> Result<&Self> {
         // if let Some(handle) = self.handle.lock().unwrap().as_ref() {
-        if let Some(handle) = self.handle.as_ref() {
+        if let Some(handle) = self.handle.lock().unwrap().as_ref() {
             let success = unsafe { UpdateResourceA(
                 *handle,
                 kind,
@@ -264,7 +264,7 @@ impl Resources {
     }
 
     pub fn replace_with_args(&self, kind : &Id, name : &Id, lang : u16, data : &[u8]) -> Result<&Self> {
-        if let Some(handle) = self.handle.as_ref() {
+        if let Some(handle) = self.handle.lock().unwrap().as_ref() {
             let success = unsafe { UpdateResourceA(
                 *handle,
                 kind,
@@ -287,7 +287,7 @@ impl Resources {
     }
 
     pub fn close(&mut self) {
-        if let Some(handle) = self.handle.take() {
+        if let Some(handle) = self.handle.lock().unwrap().take() {
             unsafe {
                 EndUpdateResourceA(handle,false);
             };
@@ -295,7 +295,7 @@ impl Resources {
     }
 
     pub fn discard(&mut self) {
-        if let Some(handle) = self.handle.take() {
+        if let Some(handle) = self.handle.lock().unwrap().take() {
             unsafe {
                 EndUpdateResourceA(handle,true);
             };
@@ -303,12 +303,12 @@ impl Resources {
     }
 
     // pub fn 
-    pub fn insert(&mut self, r : Resource) {
-        self.list.push(r)
+    pub fn insert(&self, r : Resource) {
+        self.list.lock().unwrap().push(r)
     }
 
     pub fn find(&self, typeid : Id, nameid: Id) -> Option<Resource> {
-        for item in self.list.iter() {
+        for item in self.list.lock().unwrap().iter() {
             if item.kind == typeid && item.name == nameid {
                 return Some(item.clone());
             }
@@ -326,7 +326,7 @@ impl Drop for Resources {
 }
 
 pub unsafe extern "system" fn enum_languages(hmodule: HINSTANCE, lptype: PCSTR, lpname: PCSTR, lang: u16, lparam: isize) -> BOOL {
-    let rptr : *mut Resources = std::mem::transmute(lparam);
+    let rptr : *const Resources = std::mem::transmute(lparam);
     let hresinfo = match FindResourceExA(hmodule,lptype,lpname,lang) {
         Ok(hresinfo) => hresinfo,
         Err(e) => panic!("Unable to find resource {:?} {:?} {:?} {lang}: {e}", hmodule,lptype,lpname)
@@ -335,7 +335,7 @@ pub unsafe extern "system" fn enum_languages(hmodule: HINSTANCE, lptype: PCSTR, 
     let len = SizeofResource(hmodule,hresinfo);
     let data_ptr = LockResource(resource);
     let data = std::slice::from_raw_parts(std::mem::transmute(data_ptr) , len as usize);
-    let resources = &mut *rptr;
+    let resources = &*rptr;
     resources.insert(Resource::new(lptype,lpname,lang,data));
     BOOL(1)
 }

@@ -13,6 +13,7 @@ Load and modify windows resources in existing executables (.exe or .res)
 [dependencies]
 thiserror = "1.0.37"
 manual-serializer = { path="../manual-serializer" }
+derivative = "2.2.0"
 
 [dependencies.windows]
 version = "0.43.0"

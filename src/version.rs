@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use crate::error::Error;
 use crate::result::Result;
 use manual_serializer::*;
-
+use crate::utils::*;
 
 #[derive(Debug)]
 pub struct Header {
@@ -79,6 +79,25 @@ impl TryDeserialize for Header {
     }
 }
 
+
+pub fn try_build_struct(
+    key : &str,
+    data_type : DataType,
+    value_len: usize,
+    value : &[u8]
+) -> Result<Vec<u8>> {
+    let mut dest = Serializer::new(4096);
+    let header = Header::new(0,0,data_type,key);
+    // println!("header {:?}",header);
+    dest.try_serialize(&header)?;
+    dest.try_u8slice(value)?;
+    let mut vec = dest.to_vec();
+    store_u16(&mut vec[0..2], dest.len() as u16);
+    store_u16(&mut vec[2..4], value_len as u16);
+    // println!("vec: {:?}", vec);
+    Ok(vec)
+}
+
 #[derive(Debug, Clone)]
 pub struct FileInfo {
     pub signature : u32,
@@ -116,6 +135,47 @@ impl Default for FileInfo {
     }
 }
 
+impl FileInfo {
+    pub fn print(&self) {
+        println!("signature: 0x{:x}", self.signature);
+        println!("struc_version: 0x{:x}", self.struc_version);
+        println!("file_version_ms: {} (0x{:x})", self.file_version_ms, self.file_version_ms);
+        println!("file_version_ls: {} (0x{:x})", self.file_version_ls, self.file_version_ls);
+        println!("file_version: {:?}", self.get_file_version());
+        println!("product_version_ms: {} (0x{:x})", self.product_version_ms, self.product_version_ms);
+        println!("product_version_ls: {} (0x{:x})", self.product_version_ls, self.product_version_ls);
+        println!("product_version: {:?}", self.get_product_version());
+        println!("file_flags_mask: 0x{:x}", self.file_flags_mask);
+        println!("file_flags: 0x{:x}", self.file_flags);
+        println!("file_os: 0x{:x}", self.file_os);
+        println!("file_type: 0x{:x}", self.file_type);
+        println!("file_subtype: 0x{:x}", self.file_subtype);
+        println!("file_date_ms: {}", self.file_date_ms);
+        println!("file_date_ls: {}", self.file_date_ls);
+    }
+
+    // pub fn test(&mut self) {
+    //     let v = vec![1,2,3,4];
+    //     self.set_file_version(v.as_slice().try_into().unwrap());
+    // }
+
+    pub fn get_file_version(&self) -> [u16;4] {
+        u32msls_as_u16vec(self.file_version_ms, self.file_version_ls)
+    }
+
+    pub fn set_file_version(&mut self, v: &[u16;4]) {
+        u16vec_to_u32msls(v,&mut self.file_version_ms, &mut self.file_version_ls);
+    }
+
+    pub fn get_product_version(&self) -> [u16;4] {
+        u32msls_as_u16vec(self.product_version_ms, self.product_version_ls)
+    }
+    
+    pub fn set_product_version(&mut self, v: &[u16;4]) {
+        u16vec_to_u32msls(v,&mut self.product_version_ms, &mut self.product_version_ls);
+    }
+
+}
 // impl TryFrom<&mut Deserializer<'_>> for FileInfo {
 impl TryDeserialize for FileInfo {
     type Error = Error;
@@ -171,20 +231,6 @@ impl TrySerialize for FileInfo {
 }
 
 #[derive(Debug, Clone)]
-pub enum DataType {
-    Binary,
-    Text,
-}
-
-#[derive(Debug, Clone)]
-pub struct VersionInfo {
-    pub data_type : DataType,
-    pub key : String,
-    pub info : FileInfo,
-    pub children : Vec<VersionInfoChild>,
-}
-
-#[derive(Debug, Clone)]
 pub enum VersionInfoChild {
     StringFileInfo {
         tables : HashMap<String, HashMap<String,Data>>
@@ -198,81 +244,6 @@ pub enum VersionInfoChild {
 pub enum Data {
     Binary(Vec<u8>),
     Text(String)
-}
-
-pub fn utf16sz_to_u16vec(text: &String) -> Vec<u16> {
-    let len = text.len()+1;
-    let mut vec: Vec<u16> = Vec::with_capacity(len);
-    vec.resize(len,0);
-    for c in text.chars() {
-        // TODO - proper encoding
-        // let buf = [0;2];
-        // c.encode_utf16(&mut buf);
-        vec.push(c as u16);
-    }
-    vec.push(0);
-    vec
-}
-
-pub fn utf16sz_to_u8vec(text: &String) -> Vec<u8> {
-    let len = text.len()+1;
-    let mut u16vec: Vec<u16> = Vec::with_capacity(len);
-    u16vec.resize(len,0);
-    for c in text.chars() {
-        // TODO - proper encoding
-        // let buf = [0;2];
-        // c.encode_utf16(&mut buf);
-        u16vec.push(c as u16);
-    }
-    u16vec.push(0);
-    let len = len*2;
-    let mut u8vec = Vec::with_capacity(len);
-    u8vec.resize(len,0);
-    let src = unsafe { std::mem::transmute(u16vec.as_ptr()) };
-    let dest = u8vec[0..].as_mut_ptr();
-    unsafe { std::ptr::copy(src,dest,len); }
-    u8vec
-}
-
-pub fn u32slice_to_u8vec(u32slice: &[u32]) -> Vec<u8> {
-    let len = u32slice.len()*4;
-    let mut u8vec = Vec::with_capacity(len);
-    u8vec.resize(len,0);
-    let src = unsafe { std::mem::transmute(u32slice.as_ptr()) };
-    let dest = u8vec[0..].as_mut_ptr();
-    unsafe { std::ptr::copy(src,dest,len); }
-    u8vec
-}
-// pub fn u8slice_to_u16vec(data: &[u8]) -> Vec<u16> {
-//     let len = data.len();
-//     let words = len / 2 + (len % 2);
-//     let mut vec = Vec::with_capacity(words);
-//     vec.resize(words,0);
-//     let src = unsafe { std::mem::transmute(vec.as_ptr()) };
-//     let dest = vec[0..].as_mut_ptr();
-//     unsafe { std::ptr::copy(src,dest,len); }
-//     vec
-// }
-
-pub fn try_build_struct(
-    key : &str,
-    data_type : DataType,
-    value_len: usize,
-    value : &[u8]
-) -> Result<Vec<u8>> {
-    let mut dest = Serializer::new(4096);
-
-    let header = Header::new(0,0,data_type,key);
-    // let value_len = value.len();
-
-    dest.try_serialize(&header)?;
-    dest.try_u8slice(value)?;
-
-    let mut vec = dest.to_vec();
-    store_u16(&mut vec[0..2], dest.len() as u16);
-    store_u16(&mut vec[2..4], value_len as u16);
-
-    Ok(vec)
 }
 
 impl TrySerialize for VersionInfoChild {
@@ -297,13 +268,13 @@ impl TrySerialize for VersionInfoChild {
                             },
                             Data::Text(text) => {
                                 (
-                                    DataType::Binary,
+                                    DataType::Text,
                                     utf16sz_to_u8vec(text)
                                 )
                             },
                         };
 
-                        let string_record = try_build_struct(key_record,data_type,data.len(),&data)?;
+                        let string_record = try_build_struct(key_record,data_type,data.len()/2,&data)?;
                         lang_records.try_align_u32()?;
                         lang_records.try_u8slice(&string_record)?;
                     }
@@ -397,6 +368,20 @@ impl TryDeserialize for VersionInfoChild {
 
 }
 
+#[derive(Debug, Clone)]
+pub enum DataType {
+    Binary,
+    Text,
+}
+
+#[derive(Debug, Clone)]
+pub struct VersionInfo {
+    pub data_type : DataType,
+    pub key : String,
+    pub info : FileInfo,
+    pub children : Vec<VersionInfoChild>,
+}
+
 impl TryFrom<&[u8]> for VersionInfo {
     type Error = Error;
     fn try_from(data: &[u8]) -> Result<VersionInfo> {
@@ -447,13 +432,40 @@ impl VersionInfo {
         }
         let child_data = child_data.to_vec();
 
-        let file_info_data = Serializer::default().try_serialize(&self.info)?.to_vec();
+        let file_info_data = Serializer::default()
+            .try_serialize(&self.info)?
+            .to_vec();
 
-        let version_info = try_build_struct("VS_VERSION_INFO",DataType::Binary,file_info_data.len(),&file_info_data)?;
+        let data = Serializer::default()
+            .try_u8slice(&file_info_data)?
+            .try_align_u32()?
+            .try_u8slice(&child_data)?
+            .to_vec();
+
+        let version_info = try_build_struct("VS_VERSION_INFO",DataType::Binary,file_info_data.len(),&data)?;
         dest.try_u8slice(&version_info)?;
-        dest.try_align_u32()?;
-        dest.try_u8slice(&child_data)?;
+        // dest.try_align_u32()?;
+        // dest.try_u8slice(&child_data)?;
 
         Ok(dest.to_vec())
+    }
+
+    pub fn set_file_version(&mut self, v : &[u16;4]) {
+        self.info.set_file_version(v);
+        self.replace_string("FileVersion", &format_version_string(v))
+    }
+    
+    pub fn set_product_version(&mut self, v : &[u16;4]) {
+        self.info.set_product_version(v);
+        self.replace_string("ProductVersion", &format_version_string(v))
+    }
+
+    pub fn set_version(&mut self, v: &[u16;4]) {
+        self.set_file_version(v);
+        self.set_product_version(v);
+    }
+
+    pub fn replace_string(&mut self, key: &str, text: &str) {
+
     }
 }
