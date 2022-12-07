@@ -154,6 +154,10 @@ impl Resource {
 
         info
     }
+
+    pub fn set_data(&mut self, data: &[u8]) {
+        self.data = data.to_vec();
+    }
 }
 
 #[derive(Debug)]
@@ -261,6 +265,11 @@ impl Resources {
 
         Ok(self)
         
+    }
+
+    pub fn try_replace(&self, resource: &Resource) -> Result<&Self> {
+        self.replace_with_args(&resource.kind, &resource.name, resource.lang, &resource.data)?;
+        Ok(self)
     }
 
     pub fn replace_with_args(&self, kind : &Id, name : &Id, lang : u16, data : &[u8]) -> Result<&Self> {

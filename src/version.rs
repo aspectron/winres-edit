@@ -209,7 +209,6 @@ impl FileInfo {
         println!("signature: 0x{:x}", self.signature);
         println!("struc_version: 0x{:x}", self.struc_version);
         println!("file_version: {}", self.file_version);
-        println!("file_version: {:?}", self.file_version);
         println!("product_version: {}", self.product_version);
         println!("file_flags_mask: 0x{:x}", self.file_flags_mask);
         println!("file_flags: 0x{:x}", self.file_flags);
