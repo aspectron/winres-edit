@@ -37,17 +37,17 @@ impl TrySerialize for Header {
     type Error = Error;
     fn try_serialize(&self, dest: &mut Serializer) -> Result<()> {
         dest.try_align_u32()?;
-        dest.try_u16(self.length as u16)?;
-        dest.try_u16(self.value_length as u16)?;
+        dest.try_store_u16le(self.length as u16)?;
+        dest.try_store_u16le(self.value_length as u16)?;
         match self.data_type {
             DataType::Binary => {
-                dest.try_u16(0)?;
+                dest.try_store_u16le(0)?;
             },
             DataType::Text => {
-                dest.try_u16(1)?;
+                dest.try_store_u16le(1)?;
             }
         };
-        dest.try_utf16sz(&self.key)?;
+        dest.try_store_utf16le_sz(&self.key)?;
         dest.try_align_u32()?;
         Ok(())
     }
@@ -60,24 +60,23 @@ impl TryDeserialize for Header {
         src.try_align_u32()?;
 
         let cursor = src.cursor();
-        let length = src.try_u16()? as usize;
-        let value_length = src.try_u16()? as usize;
-        let data_type = src.try_u16()?;
-        println!("@ cursor: {cursor} length: {length} value_length: {value_length} data_type: {data_type}");
+        let length = src.try_load_u16le()? as usize;
+        let value_length = src.try_load_u16le()? as usize;
+        let data_type = src.try_load_u16le()?;
+        // println!("@ cursor: {cursor} length: {length} value_length: {value_length} data_type: {data_type}");
         let data_type = match data_type {
             0 => DataType::Binary,
             1 => DataType::Text,
-            _ => return Err(format!("invalid version resource data type").into())
+            _ => return Err(format!("Header::try_deserealize(): invalid resource data type (must be 1 or 0) - possible misalignment/corruption").into())
         };
-        let key = src.try_utf16sz()?;
+        let key = src.try_load_utf16le_sz()?;
 
         let padding = src.cursor() % 4;
-        println!("$---: padding: {padding}");
         src.try_offset(padding)?;
         let last = cursor + length;
 
         let header = Header {length,value_length,data_type,key,last};
-        println!("{:#?}", header);
+        // println!("{:#?}", header);
         Ok(header)
     }
 }
@@ -92,11 +91,11 @@ pub fn try_build_struct(
     let mut dest = Serializer::new(4096);
     let header = Header::new(0,0,data_type,key);
     // println!("header {:?}",header);
-    dest.try_serialize(&header)?;
-    dest.try_u8slice(value)?;
+    dest.try_store(&header)?;
+    dest.try_store_u8_slice(value)?;
     let mut vec = dest.to_vec();
-    store_u16(&mut vec[0..2], dest.len() as u16);
-    store_u16(&mut vec[2..4], value_len as u16);
+    store_u16le(&mut vec[0..2], dest.len() as u16);
+    store_u16le(&mut vec[2..4], value_len as u16);
     // println!("vec: {:?}", vec);
     Ok(vec)
 }
@@ -113,8 +112,8 @@ impl Default for Version {
 impl TryDeserialize for Version {
     type Error = Error;
     fn try_deserialize(src:&mut Deserializer) -> Result<Self> {
-        let ms = src.try_u32()?;
-        let ls = src.try_u32()?;
+        let ms = src.try_load_u32le()?;
+        let ls = src.try_load_u32le()?;
         Ok(Version([(ms >> 16) as u16, (ms & 0xffff) as u16, (ls >> 16) as u16, (ls & 0xffff) as u16]))
     }
 }
@@ -122,8 +121,8 @@ impl TryDeserialize for Version {
 impl TrySerialize for Version {
     type Error = Error;
     fn try_serialize(&self, dest:&mut Serializer) -> Result<()> {
-        dest.try_u32((self.0[0] as u32) << 16 | (self.0[1] as u32))?;
-        dest.try_u32((self.0[2] as u32) << 16 | (self.0[3] as u32))?;
+        dest.try_store_u32le((self.0[0] as u32) << 16 | (self.0[1] as u32))?;
+        dest.try_store_u32le((self.0[2] as u32) << 16 | (self.0[3] as u32))?;
         Ok(())
     }
 }
@@ -151,8 +150,8 @@ impl Default for Date {
 impl TryDeserialize for Date {
     type Error = Error;
     fn try_deserialize(src:&mut Deserializer) -> Result<Self> {
-        let ms = src.try_u32()? as u64;
-        let ls = src.try_u32()? as u64;
+        let ms = src.try_load_u32le()? as u64;
+        let ls = src.try_load_u32le()? as u64;
         Ok(Date(ms << 32 | ls))
     }
 }
@@ -160,8 +159,8 @@ impl TryDeserialize for Date {
 impl TrySerialize for Date {
     type Error = Error;
     fn try_serialize(&self, dest:&mut Serializer) -> Result<()> {
-        dest.try_u32((self.0 >> 32) as u32)?;
-        dest.try_u32((self.0 & 0xffffffff) as u32)?;
+        dest.try_store_u32le((self.0 >> 32) as u32)?;
+        dest.try_store_u32le((self.0 & 0xffffffff) as u32)?;
         Ok(())
     }
 }
@@ -228,16 +227,16 @@ impl TryDeserialize for FileInfo {
         // let src = Deserializer::new(data);
 
         let info = FileInfo {
-            signature : src.try_u32()?,
-            struc_version : src.try_u32()?,
-            file_version : src.try_deserialize()?,
-            product_version : src.try_deserialize()?,
-            file_flags_mask : src.try_u32()?,
-            file_flags : src.try_u32()?,
-            file_os : src.try_u32()?,
-            file_type : src.try_u32()?,
-            file_subtype : src.try_u32()?,
-            file_date : src.try_deserialize()?,
+            signature : src.try_load_u32le()?,
+            struc_version : src.try_load_u32le()?,
+            file_version : src.try_load()?,
+            product_version : src.try_load()?,
+            file_flags_mask : src.try_load_u32le()?,
+            file_flags : src.try_load_u32le()?,
+            file_os : src.try_load_u32le()?,
+            file_type : src.try_load_u32le()?,
+            file_subtype : src.try_load_u32le()?,
+            file_date : src.try_load()?,
         };
 
         if info.signature != 0xfeef04bd {
@@ -252,16 +251,16 @@ impl TrySerialize for FileInfo {
     type Error = Error;
     fn try_serialize(&self, dest: &mut Serializer) -> Result<()> {
         dest
-            .try_u32(self.signature)?
-            .try_u32(self.struc_version)?
-            .try_serialize(&self.file_version)?
-            .try_serialize(&self.product_version)?
-            .try_u32(self.file_flags_mask)?
-            .try_u32(self.file_flags)?
-            .try_u32(self.file_os)?
-            .try_u32(self.file_type)?
-            .try_u32(self.file_subtype)?
-            .try_serialize(&self.file_date)?;
+            .try_store_u32le(self.signature)?
+            .try_store_u32le(self.struc_version)?
+            .try_store(&self.file_version)?
+            .try_store(&self.product_version)?
+            .try_store_u32le(self.file_flags_mask)?
+            .try_store_u32le(self.file_flags)?
+            .try_store_u32le(self.file_os)?
+            .try_store_u32le(self.file_type)?
+            .try_store_u32le(self.file_subtype)?
+            .try_store(&self.file_date)?;
 
         Ok(())
     }
@@ -303,13 +302,13 @@ impl TrySerialize for VersionInfoChild {
 
                         let string_record = try_build_struct(key_record,data_type,data.len()/2,&data)?;
                         lang_records.try_align_u32()?;
-                        lang_records.try_u8slice(&string_record)?;
+                        lang_records.try_store_u8_slice(&string_record)?;
                     }
                     
                     let string_table = try_build_struct(key_lang,DataType::Binary,0,&lang_records.to_vec())?;
                     let string_file_info = try_build_struct("StringFileInfo",DataType::Binary,0,&string_table)?;
                     dest.try_align_u32()?;
-                    dest.try_u8slice(&string_file_info)?;
+                    dest.try_store_u8_slice(&string_file_info)?;
                 }
             },
             VersionInfoChild::VarFileInfo { vars } => {
@@ -317,11 +316,11 @@ impl TrySerialize for VersionInfoChild {
                 for (k,data) in vars {
                     let var_record = try_build_struct(k,DataType::Binary,data.len()/2,&u32slice_to_u8vec(data))?;
                     var_records.try_align_u32()?;
-                    var_records.try_u8slice(&var_record)?;
+                    var_records.try_store_u8_slice(&var_record)?;
                 }
                 let var_file_info = try_build_struct("VarFileInfo",DataType::Binary,0,&var_records.to_vec())?;
                 dest.try_align_u32()?;
-                dest.try_u8slice(&var_file_info)?;
+                dest.try_store_u8_slice(&var_file_info)?;
             }
         }
 
@@ -333,30 +332,27 @@ impl TryDeserialize for VersionInfoChild {
     type Error = Error;
     fn try_deserialize(src: &mut Deserializer) -> Result<VersionInfoChild> {
 
-        let header: Header = src.try_deserialize()?;
+        let header: Header = src.try_load()?;
 
         let data = match header.key.as_str() {
             "StringFileInfo" => {
                 let mut tables = HashMap::new();
                 while src.cursor() < header.last {
 
-                    println!("loading string table");
-                    let string_table_header: Header = src.try_deserialize()?;
+                    let string_table_header: Header = src.try_load()?;
                     let lang = string_table_header.key;
                     let mut data = HashMap::new();
         
                     while src.cursor() < string_table_header.last {
-                        println!("loading string table record");
-                        let string_header: Header = src.try_deserialize()?;
+                        let string_header: Header = src.try_load()?;
                         match string_header.data_type {
                             DataType::Binary => {
-                                println!("!!! BINARY DATA !!!");
                                 let len = string_header.value_length*2;
-                                let vec = src.try_u8vec(len)?;
+                                let vec = src.try_load_u8_vec(len)?;
                                 data.insert(string_header.key, Data::Binary(vec));
                             },
                             DataType::Text => {
-                                let text = src.try_utf16sz()?;
+                                let text = src.try_load_utf16le_sz()?;
                                 data.insert(string_header.key, Data::Text(text));
                             }
                         };
@@ -372,11 +368,11 @@ impl TryDeserialize for VersionInfoChild {
                 let mut vars = HashMap::new();
                 while src.cursor() < header.last {
                     // let var_header = Header::try_from(&mut *src)?;
-                    let var_header: Header = src.try_deserialize()?;
+                    let var_header: Header = src.try_load()?;
         
                     let mut values = Vec::new();
                     while src.cursor() < var_header.last {
-                        values.push(src.try_u32()?);
+                        values.push(src.try_load_u32le()?);
                     }
         
                     vars.insert(var_header.key, values);
@@ -415,27 +411,17 @@ impl TryFrom<Arc<Resource>> for VersionInfo {
         let data = resource.encoded.lock().unwrap();
         let mut src = Deserializer::new(&data);
 
-        println!("#----- remaining at start: {}", src.remaining());
-        
-        let header: Header = src.try_deserialize()?;
-        println!("#----- remaining after VSI header: {}", src.remaining());
-        println!("HEADER: {:#?}", header);
-        println!("FileInfoHeader size: {}", std::mem::size_of::<FileInfo>());
-        let info :FileInfo = src.try_deserialize()?;
+        let header: Header = src.try_load()?;
+        let info :FileInfo = src.try_load()?;
         let skip = src.cursor() % 4;
         src.try_offset(skip)?;
-        println!("skip: {}", skip);
-        println!("#----- remaining after FileInfo: {}", src.remaining());
 
         let mut children = Vec::new();
         let mut remaining = src.remaining();
         while remaining > 0 {
-            println!("#----- remaining before: {}", src.remaining());
-            
-            let child: VersionInfoChild = src.try_deserialize()?;
+            let child: VersionInfoChild = src.try_load()?;
             children.push(child);
             remaining = src.remaining();
-            println!("#----- remaining before: {}", remaining);
         }
 
         let info = VersionInfo {
@@ -457,23 +443,23 @@ impl VersionInfo {
 
         let mut child_data = Serializer::default();
         for child in &self.children {
-            child_data.try_serialize(child)?;
+            child_data.try_store(child)?;
             child_data.try_align_u32()?;
         }
         let child_data = child_data.to_vec();
 
         let file_info_data = Serializer::default()
-            .try_serialize(&self.info)?
+            .try_store(&self.info)?
             .to_vec();
 
         let data = Serializer::default()
-            .try_u8slice(&file_info_data)?
+            .try_store_u8_slice(&file_info_data)?
             .try_align_u32()?
-            .try_u8slice(&child_data)?
+            .try_store_u8_slice(&child_data)?
             .to_vec();
 
         let version_info = try_build_struct("VS_VERSION_INFO",DataType::Binary,file_info_data.len(),&data)?;
-        dest.try_u8slice(&version_info)?;
+        dest.try_store_u8_slice(&version_info)?;
 
         Ok(dest.to_vec())
     }
