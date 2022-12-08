@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use crate::error::Error;
 use crate::result::Result;
 use manual_serializer::*;
 use crate::utils::*;
 use std::fmt;
+use crate::resources::Resource;
 
 #[derive(Debug)]
 pub struct Header {
@@ -399,16 +401,20 @@ pub enum DataType {
 
 #[derive(Debug, Clone)]
 pub struct VersionInfo {
+    pub resource : Arc<Resource>,
     pub data_type : DataType,
     pub key : String,
     pub info : FileInfo,
     pub children : Vec<VersionInfoChild>,
 }
 
-impl TryFrom<&[u8]> for VersionInfo {
+impl TryFrom<Arc<Resource>> for VersionInfo {
     type Error = Error;
-    fn try_from(data: &[u8]) -> Result<VersionInfo> {
-        let mut src = Deserializer::new(data);
+    fn try_from(resource: Arc<Resource>) -> Result<VersionInfo> {
+        // let clone = resource.clone();
+        let data = resource.encoded.lock().unwrap();
+        let mut src = Deserializer::new(&data);
+
         println!("#----- remaining at start: {}", src.remaining());
         
         let header: Header = src.try_deserialize()?;
@@ -433,6 +439,7 @@ impl TryFrom<&[u8]> for VersionInfo {
         }
 
         let info = VersionInfo {
+            resource : resource.clone(),
             data_type : header.data_type,
             key : header.key,
             info,
@@ -471,22 +478,25 @@ impl VersionInfo {
         Ok(dest.to_vec())
     }
 
-    pub fn set_file_version(&mut self, v : &[u16;4]) {
+    pub fn set_file_version(&mut self, v : &[u16;4]) -> &mut Self {
         self.info.file_version = Version(*v);
-        self.insert_string("FileVersion", &Version(*v).to_string())
+        self.insert_string("FileVersion", &Version(*v).to_string());
+        self
     }
     
-    pub fn set_product_version(&mut self, v : &[u16;4]) {
+    pub fn set_product_version(&mut self, v : &[u16;4]) -> &mut Self {
         self.info.product_version = Version(*v);
-        self.insert_string("ProductVersion", &Version(*v).to_string())
+        self.insert_string("ProductVersion", &Version(*v).to_string());
+        self
     }
 
-    pub fn set_version(&mut self, v: &[u16;4]) {
+    pub fn set_version(&mut self, v: &[u16;4]) -> &mut Self {
         self.set_file_version(v);
         self.set_product_version(v);
+        self
     }
 
-    pub fn replace_string(&mut self, key: &str, text: &str) {
+    pub fn replace_string(&mut self, key: &str, text: &str) -> &mut Self {
         for child in self.children.iter_mut() {
             match child {
                 VersionInfoChild::StringFileInfo { tables } => {
@@ -499,9 +509,10 @@ impl VersionInfo {
                 _ => { }
             }
         }
+        self
     }
 
-    pub fn insert_string(&mut self, key: &str, text: &str) {
+    pub fn insert_string(&mut self, key: &str, text: &str) -> &mut Self {
         for child in self.children.iter_mut() {
             match child {
                 VersionInfoChild::StringFileInfo { tables } => {
@@ -512,9 +523,10 @@ impl VersionInfo {
                 _ => { }
             }
         }
+        self
     }
 
-    pub fn remove_string(&mut self, key: &str) {
+    pub fn remove_string(&mut self, key: &str) -> &mut Self {
         for child in self.children.iter_mut() {
             match child {
                 VersionInfoChild::StringFileInfo { tables } => {
@@ -525,9 +537,10 @@ impl VersionInfo {
                 _ => { }
             }
         }
+        self
     }
 
-    pub fn ensure_language(&mut self, lang: &str) {
+    pub fn ensure_language(&mut self, lang: &str) -> &mut Self {
         for child in self.children.iter_mut() {
             match child {
                 VersionInfoChild::StringFileInfo { tables } => {
@@ -538,6 +551,12 @@ impl VersionInfo {
                 _ => { }
             }
         }
+        self
     }
     
+
+    pub fn update(&mut self) -> Result<()> {
+        self.resource.replace(&self.try_to_vec()?)?.update();
+        Ok(())
+    }
 }

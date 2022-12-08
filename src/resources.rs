@@ -7,6 +7,7 @@ use windows::{
 };
 use crate::utils::*;
 use crate::result::*;
+use crate::version::*;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Id {
@@ -104,7 +105,7 @@ pub enum ResourceData {
     Menu(ResourceDataInner),
     MessageTable(ResourceDataInner),
     PlugPlay(ResourceDataInner),
-    Version(ResourceDataInner),
+    Version(VersionInfo),
     VxD(ResourceDataInner),
     Unknown(ResourceDataInner),
 }
@@ -114,8 +115,9 @@ pub struct Resource {
     pub kind : Id,
     pub name : Id,
     pub lang : u16,
-    pub data : Vec<u8>,
-    pub resource : ResourceData,
+    pub encoded : Arc<Mutex<Vec<u8>>>,
+    pub decoded : Arc<Mutex<Option<ResourceData>>>,
+    module_handle : Arc<Mutex<Option<HANDLE>>>,
 }
 
 impl std::fmt::Debug for Resource {
@@ -125,8 +127,8 @@ impl std::fmt::Debug for Resource {
             .field("kind",&self.kind)
             .field("name",&self.name)
             .field("lang",&self.lang)
-            .field("data len",&self.data.len())
-            .field("resource",&self.resource)
+            .field("data len",&self.encoded.lock().unwrap().len())
+            // .field("resource",&self.decoded)
             //  .field("resource",&format!("{:?}",self.resource))
             //  .field("\n\tdata",&format!("[{}]: {:?}",self.data.len(),&self.data[0..std::cmp::min(30,self.data.len())]))
             //  .field("\n\ttext",&format!("{}",text.unwrap_or("N/A".into())))
@@ -135,36 +137,108 @@ impl std::fmt::Debug for Resource {
 }
 
 impl Resource {
-    pub fn new(rtype : PCSTR, rname: PCSTR, rlang: u16, data : &[u8]) -> Resource {
+    pub fn new(
+        rtype : PCSTR,
+        rname: PCSTR,
+        rlang: u16,
+        data : &[u8],
+        module_handle : Arc<Mutex<Option<HANDLE>>>,
+    ) -> Resource {
         let typeid : Id = rtype.into();
-        let resource_data = ResourceDataInner {};
-        let resource = match typeid {
-            rt::ACCELERATOR => ResourceData::Accelerator(resource_data),
-            rt::ICON => ResourceData::Icon(resource_data),
-            _ => ResourceData::Unknown(resource_data),
-        };
+        // let resource_data = ResourceDataInner {};
+        // let resource = match typeid {
+        //     rt::ACCELERATOR => ResourceData::Accelerator(resource_data),
+        //     rt::ICON => ResourceData::Icon(resource_data),
+        //     rt::VERSION => {
+        //         ResourceData::Version(version_info)
+        //     },
+        //     _ => ResourceData::Unknown(resource_data),
+        // };
 
         let info = Resource {
             kind : typeid,
             name : rname.into(),
             lang: rlang,
-            data : data.to_vec(),
-            resource
+            encoded : Arc::new(Mutex::new(data.to_vec())),
+            decoded : Arc::new(Mutex::new(None)),
+            module_handle
         };
 
         info
     }
 
-    pub fn set_data(&mut self, data: &[u8]) {
-        self.data = data.to_vec();
+    // pub fn set_data(&mut self, data: &[u8]) {
+    //     *self.encoded.lock().unwrap() = data.to_vec();
+    // }
+
+    pub fn remove(&self) -> Result<&Self> {
+        if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
+            let success = unsafe { UpdateResourceA(
+                *handle,
+                self.kind.clone(),
+                self.name.clone(),
+                self.lang,
+                None,
+                0
+            ).as_bool() };
+
+            if !success {
+                return Err(format!("Resources::load(): Error removing resources: {:?}",get_last_error()).into());
+            } 
+
+        } else {
+            return Err(format!("Resource::replace(): resource file is not open").into());
+        };
+
+        Ok(self)
+        
     }
+    pub fn replace(&self, data : &[u8]) -> Result<&Self> {
+        *self.encoded.lock().unwrap() = data.to_vec();
+        Ok(self)
+    }
+
+    pub fn update(&self) -> Result<&Self> {
+        
+        if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
+            let encoded = self.encoded.lock().unwrap();
+            let success = unsafe { UpdateResourceA(
+                *handle,
+                self.kind.clone(),
+                self.name.clone(),
+                self.lang,
+                Some(std::mem::transmute(encoded.as_ptr())),
+                encoded.len() as u32
+            ).as_bool() };
+
+            if !success {
+                return Err(format!("Resources::load(): Error removing resources: {:?}",get_last_error()).into());
+            } 
+
+        } else {
+            return Err(format!("Resource::replace(): resource file is not open").into());
+        };
+
+        Ok(self)
+        
+    }
+
 }
+
+// impl TryInto<VersionInfo> for Arc<Resource> {
+//     type Error = crate::error::Error;
+//     fn try_into(self) -> Result<VersionInfo> {
+//         let version_info = VersionInfo::try_from(self.encoded.lock().unwrap().as_slice())?;
+
+//         Ok(version_info)
+//     }
+// }
 
 #[derive(Debug)]
 pub struct Resources {
     file : PathBuf,
-    handle : Arc<Mutex<Option<HANDLE>>>,
-    pub list : Arc<Mutex<Vec<Resource>>>,
+    module_handle : Arc<Mutex<Option<HANDLE>>>,
+    pub list : Arc<Mutex<Vec<Arc<Resource>>>>,
     // handle : Option<HANDLE>,
     // pub list : Vec<Resource>,
 }
@@ -174,7 +248,7 @@ impl Resources {
     pub fn new(file: &PathBuf) -> Resources {
         Resources {
             file : file.clone(),
-            handle : Arc::new(Mutex::new(None)),
+            module_handle : Arc::new(Mutex::new(None)),
             list : Arc::new(Mutex::new(Vec::new()))
         }
     }
@@ -208,7 +282,7 @@ impl Resources {
 
     pub fn is_open(&self) -> bool {
         // self.handle.is_some()
-        self.handle.lock().unwrap().is_some()
+        self.module_handle.lock().unwrap().is_some()
     }
 
     pub fn open(&mut self) -> Result<&Self> {
@@ -232,7 +306,7 @@ impl Resources {
                 delete_existing_resources)?
         };
 
-        self.handle.lock().unwrap().replace(handle);
+        self.module_handle.lock().unwrap().replace(handle);
         // self.handle.lock().unwrap().replace(handle);
         
         Ok(self)
@@ -245,7 +319,7 @@ impl Resources {
 
     pub fn remove_with_args(&self, kind : &Id, name : &Id, lang : u16) -> Result<&Self> {
         // if let Some(handle) = self.handle.lock().unwrap().as_ref() {
-        if let Some(handle) = self.handle.lock().unwrap().as_ref() {
+        if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
             let success = unsafe { UpdateResourceA(
                 *handle,
                 kind,
@@ -268,12 +342,12 @@ impl Resources {
     }
 
     pub fn try_replace(&self, resource: &Resource) -> Result<&Self> {
-        self.replace_with_args(&resource.kind, &resource.name, resource.lang, &resource.data)?;
+        self.replace_with_args(&resource.kind, &resource.name, resource.lang, &resource.encoded.lock().unwrap())?;
         Ok(self)
     }
 
     pub fn replace_with_args(&self, kind : &Id, name : &Id, lang : u16, data : &[u8]) -> Result<&Self> {
-        if let Some(handle) = self.handle.lock().unwrap().as_ref() {
+        if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
             let success = unsafe { UpdateResourceA(
                 *handle,
                 kind,
@@ -296,7 +370,7 @@ impl Resources {
     }
 
     pub fn close(&mut self) {
-        if let Some(handle) = self.handle.lock().unwrap().take() {
+        if let Some(handle) = self.module_handle.lock().unwrap().take() {
             unsafe {
                 EndUpdateResourceA(handle,false);
             };
@@ -304,7 +378,7 @@ impl Resources {
     }
 
     pub fn discard(&mut self) {
-        if let Some(handle) = self.handle.lock().unwrap().take() {
+        if let Some(handle) = self.module_handle.lock().unwrap().take() {
             unsafe {
                 EndUpdateResourceA(handle,true);
             };
@@ -313,10 +387,10 @@ impl Resources {
 
     // pub fn 
     pub fn insert(&self, r : Resource) {
-        self.list.lock().unwrap().push(r)
+        self.list.lock().unwrap().push(Arc::new(r))
     }
 
-    pub fn find(&self, typeid : Id, nameid: Id) -> Option<Resource> {
+    pub fn find(&self, typeid : Id, nameid: Id) -> Option<Arc<Resource>> {
         for item in self.list.lock().unwrap().iter() {
             if item.kind == typeid && item.name == nameid {
                 return Some(item.clone());
@@ -324,7 +398,18 @@ impl Resources {
         }
 
         return None;
+    }
 
+    pub fn get_version_info(&self) -> Result<Option<VersionInfo>> {
+        // let mut verinfo_resource = resources.find(16.into(),1.into()).expect("unable to find verinfo");
+        for item in self.list.lock().unwrap().iter() {
+            if item.kind == rt::VERSION {
+                // let verinfo = VersionInfo::try_from(item.encoded.lock().unwrap().as_slice())?;
+                return Ok(Some(item.clone().try_into()?));
+            }
+        }
+
+        Ok(None)
     }
 }
 
@@ -345,7 +430,7 @@ pub unsafe extern "system" fn enum_languages(hmodule: HINSTANCE, lptype: PCSTR, 
     let data_ptr = LockResource(resource);
     let data = std::slice::from_raw_parts(std::mem::transmute(data_ptr) , len as usize);
     let resources = &*rptr;
-    resources.insert(Resource::new(lptype,lpname,lang,data));
+    resources.insert(Resource::new(lptype,lpname,lang,data, resources.module_handle.clone()));
     BOOL(1)
 }
 
