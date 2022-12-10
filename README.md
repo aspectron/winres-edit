@@ -1,4 +1,4 @@
-## `winres-edit`
+# `winres-edit`
 
 Crate for modification of windows resources.
 
