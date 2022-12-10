@@ -90,13 +90,11 @@ pub fn try_build_struct(
 ) -> Result<Vec<u8>> {
     let mut dest = Serializer::new(4096);
     let header = Header::new(0,0,data_type,key);
-    // println!("header {:?}",header);
     dest.try_store(&header)?;
     dest.try_store_u8_slice(value)?;
     let mut vec = dest.to_vec();
     store_u16le(&mut vec[0..2], dest.len() as u16);
     store_u16le(&mut vec[2..4], value_len as u16);
-    // println!("vec: {:?}", vec);
     Ok(vec)
 }
 
