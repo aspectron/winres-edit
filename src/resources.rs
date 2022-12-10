@@ -3,62 +3,11 @@ use windows::{
     core::PCSTR,
     Win32::Foundation::{HANDLE,HINSTANCE,BOOL}, 
     Win32::System::LibraryLoader::*, 
-    // Win32::Foundation::*, 
 };
 use crate::utils::*;
 use crate::result::*;
 use crate::version::*;
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum Id {
-    Integer(u16),
-    Text(String)
-}
-
-impl From<PCSTR> for Id {
-    fn from(v: PCSTR) -> Self {
-        let pv = v.0 as usize;
-        if pv < 0xffff {
-            Id::Integer(pv as u16)
-        } else {
-            unsafe {
-                Id::Text(v.display().to_string())
-            }
-        }
-    }
-}
-
-impl From<u16> for Id {
-    fn from(v: u16) -> Self {
-        Id::Integer(v as u16)
-    }
-}
-
-impl Into<PCSTR> for Id {
-    fn into(self) -> PCSTR {
-        match self {
-            Id::Integer(id) => {
-                PCSTR(id as *const u8)
-            },
-            Id::Text(text) => {
-                PCSTR::from_raw(format!("{text}\0").as_ptr())
-            }
-        }
-    }
-}
-
-impl Into<PCSTR> for &Id {
-    fn into(self) -> PCSTR {
-        match self {
-            Id::Integer(id) => {
-                PCSTR(*id as *const u8)
-            },
-            Id::Text(text) => {
-                PCSTR::from_raw(format!("{text}\0").as_ptr())
-            }
-        }
-    }
-}
+use crate::id::*;
 
 pub mod resource_type {
     use super::Id;
@@ -85,7 +34,7 @@ pub mod resource_type {
 
 #[derive(Debug, Clone)]
 pub struct ResourceDataInner {
-
+    // ...
 }
 
 #[derive(Debug, Clone)]
@@ -130,8 +79,6 @@ impl std::fmt::Debug for Resource {
             .field("data len",&self.encoded.lock().unwrap().len())
             // .field("resource",&self.decoded)
             //  .field("resource",&format!("{:?}",self.resource))
-            //  .field("\n\tdata",&format!("[{}]: {:?}",self.data.len(),&self.data[0..std::cmp::min(30,self.data.len())]))
-            //  .field("\n\ttext",&format!("{}",text.unwrap_or("N/A".into())))
             .finish()
     }
 }
@@ -145,16 +92,6 @@ impl Resource {
         module_handle : Arc<Mutex<Option<HANDLE>>>,
     ) -> Resource {
         let typeid : Id = rtype.into();
-        // let resource_data = ResourceDataInner {};
-        // let resource = match typeid {
-        //     rt::ACCELERATOR => ResourceData::Accelerator(resource_data),
-        //     rt::ICON => ResourceData::Icon(resource_data),
-        //     rt::VERSION => {
-        //         ResourceData::Version(version_info)
-        //     },
-        //     _ => ResourceData::Unknown(resource_data),
-        // };
-
         let info = Resource {
             kind : typeid,
             name : rname.into(),
@@ -166,10 +103,6 @@ impl Resource {
 
         info
     }
-
-    // pub fn set_data(&mut self, data: &[u8]) {
-    //     *self.encoded.lock().unwrap() = data.to_vec();
-    // }
 
     pub fn remove(&self) -> Result<&Self> {
         if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
@@ -224,15 +157,6 @@ impl Resource {
     }
 
 }
-
-// impl TryInto<VersionInfo> for Arc<Resource> {
-//     type Error = crate::error::Error;
-//     fn try_into(self) -> Result<VersionInfo> {
-//         let version_info = VersionInfo::try_from(self.encoded.lock().unwrap().as_slice())?;
-
-//         Ok(version_info)
-//     }
-// }
 
 #[derive(Debug)]
 pub struct Resources {
