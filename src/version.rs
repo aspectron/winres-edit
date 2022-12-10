@@ -512,6 +512,22 @@ impl VersionInfo {
         self
     }
 
+    pub fn insert_strings(&mut self, tuples: &[(&str,&str)]) -> &mut Self {
+        for child in self.children.iter_mut() {
+            match child {
+                VersionInfoChild::StringFileInfo { tables } => {
+                    for (_, table) in tables {
+                        for (key, text) in tuples {
+                            table.insert(key.to_string(), Data::Text(text.to_string()));
+                        }
+                    }
+                },
+                _ => { }
+            }
+        }
+        self
+    }
+
     pub fn remove_string(&mut self, key: &str) -> &mut Self {
         for child in self.children.iter_mut() {
             match child {
@@ -542,7 +558,7 @@ impl VersionInfo {
     
 
     pub fn update(&mut self) -> Result<()> {
-        self.resource.replace(&self.try_to_vec()?)?.update();
+        self.resource.replace(&self.try_to_vec()?)?.update()?;
         Ok(())
     }
 }

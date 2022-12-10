@@ -60,7 +60,7 @@ impl Into<PCSTR> for &Id {
     }
 }
 
-pub mod rt {
+pub mod resource_type {
     use super::Id;
     pub const UNKNOWN: Id = Id::Integer(0);
     pub const ACCELERATOR: Id = Id::Integer(9);
@@ -403,7 +403,7 @@ impl Resources {
     pub fn get_version_info(&self) -> Result<Option<VersionInfo>> {
         // let mut verinfo_resource = resources.find(16.into(),1.into()).expect("unable to find verinfo");
         for item in self.list.lock().unwrap().iter() {
-            if item.kind == rt::VERSION {
+            if item.kind == resource_type::VERSION {
                 // let verinfo = VersionInfo::try_from(item.encoded.lock().unwrap().as_slice())?;
                 return Ok(Some(item.clone().try_into()?));
             }

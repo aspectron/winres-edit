@@ -1,7 +1,7 @@
+mod result;
+
 mod error;
 pub use error::*;
-mod result;
-pub use result::*;
 mod version;
 pub use version::*;
 mod resources;
