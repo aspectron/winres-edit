@@ -5,11 +5,11 @@ Crate for modification of windows resources.
 [![Crates.io](https://img.shields.io/crates/l/winres-edit.svg?maxAge=2592000)](https://crates.io/crates/winres-edit)
 [![Crates.io](https://img.shields.io/crates/v/winres-edit.svg?maxAge=2592000)](https://crates.io/crates/winres-edit)
 
-## Overview
+### Overview
 
-This crate allows you to load and modify Windows resources inside of `.exe` and `.res` files.  This crate currently does not support actual resource data destructuring with exception of Version Strings (VS_VERSION_INFO), which is useful to modify application manifests. Loaded resources are available as `Vec<u8>` data.
+This crate allows you to load and modify Windows resources inside of `.exe` and `.res` files.  This crate currently does not support actual resource data destructuring with exception of Version Strings (VS_VERSION_INFO), which is useful to modify application manifests. Loaded resources are available as raw `Vec<u8>` data, useful to modify bitmaps and icons.
 
-## Example
+### Example
 
 ```rust
 let mut resources = Resources::new(&Path::new("myfile.exe"));
@@ -37,11 +37,11 @@ resources.get_version_info()?.expect("Unable to get version info")
 resources.close();
 ```
 
-## Icons
+### Icons
 
-This crate works well in conjunction with the [ico](https://crates.io/crates/ico) crate that can be used to load/store external `.ico` files as well as load `.png` files and encode them into windows-compatible resource format.
+This crate works well in conjunction with the [`ico`](https://crates.io/crates/ico) crate that can be used to load/store external `.ico` files as well as load `.png` files and encode them into windows-compatible resource format.
 
-## Example
+### Example
 
 ```rust
 let iconfile = std::fs::File::open("myicon.ico").unwrap();
@@ -53,4 +53,7 @@ let target_icon = icon_dir
     .expect("can't find 256x256 icon");
 let icon_data = target_icon.data();
 ```
+
+This crate also works well in conjunction with the [`image`](https://crates.io/image) crate that can interact with the [`ico`](https://crates.io/crates/ico) crate to load, resize and and store custom icons within resource files.
+
 
