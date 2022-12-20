@@ -1,12 +1,12 @@
 [package]
 name = "winres-edit"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/aspectron/winres-edit"
 authors = ["Anton Yemelyanov <anton.yemelyanov@gmail.com>", "Surinder Singh Matoo Mattaur <surinder83singh@gmail.com>"]
 keywords = ["windows", "resources", "icon", "version"]
-categories = ["encoding","windows-apis","parsing"]
+categories = ["encoding","os::windows-apis","parsing"]
 description = """
 Load and modify windows resources in existing executables (.exe or .res)
 """
