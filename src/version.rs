@@ -8,7 +8,8 @@ use std::fmt;
 use crate::resources::Resource;
 
 /// Helper representing structure data header used in 
-/// `VS_VERSIONINFO` and all related data structures
+/// [`VS_VERSIONINFO`](https://learn.microsoft.com/en-us/windows/win32/menurc/vs-versioninfo) 
+/// and all related data structures.
 #[derive(Debug)]
 pub struct Header {
     pub length : usize,
@@ -84,7 +85,7 @@ impl TryDeserialize for Header {
 }
 
 
-pub fn try_build_struct(
+fn try_build_struct(
     key : &str,
     data_type : DataType,
     value_len: usize,
@@ -100,6 +101,10 @@ pub fn try_build_struct(
     Ok(vec)
 }
 
+/// Windows Version value represented as `[u16;4]` array.
+/// This version struct is helpful for serialization and 
+/// deserialization of the versions packed into a `u64` value
+/// represented as 2 LE-encoded `u32` (DWORD) values.
 #[derive(Debug, Clone)]
 pub struct Version([u16;4]);
 
@@ -138,6 +143,8 @@ impl fmt::Display for Version {
     }
 }
 
+/// Date helper used for serializing and deserializing 2 LE-encoded u32
+/// values into a single `u64` value.
 #[derive(Debug, Clone)]
 pub struct Date(u64);
 
@@ -173,7 +180,8 @@ impl fmt::Display for Date {
 }
 
 
-
+/// Rust representation of [`VS_FIXEDFILEINFO`](https://learn.microsoft.com/en-us/windows/win32/api/VerRsrc/ns-verrsrc-vs_fixedfileinfo)
+/// structure.
 #[derive(Debug, Clone)]
 pub struct FileInfo {
     pub signature : u32,
@@ -266,6 +274,7 @@ impl TrySerialize for FileInfo {
     }
 }
 
+/// Helper enum for serializing and deserializing StringFileInfo and VarFileInfo child structures.
 #[derive(Debug, Clone)]
 pub enum VersionInfoChild {
     StringFileInfo {
@@ -276,6 +285,7 @@ pub enum VersionInfoChild {
     },
 }
 
+/// Wrapper of the underlying data that may be represented as a binary buffer or a text string.
 #[derive(Debug, Clone)]
 pub enum Data {
     Binary(Vec<u8>),
@@ -296,7 +306,7 @@ impl TrySerialize for VersionInfoChild {
                                 (DataType::Binary,data.clone())
                             },
                             Data::Text(text) => {
-                                (DataType::Text,utf16sz_to_u8vec(text))
+                                (DataType::Text,string_to_u8vec_sz(text))
                             },
                         };
 
@@ -389,18 +399,30 @@ impl TryDeserialize for VersionInfoChild {
 
 }
 
+
+/// Data type flag indicating if data is encoded as a binary or a text string.
 #[derive(Debug, Clone)]
 pub enum DataType {
     Binary,
     Text,
 }
 
+/// [`VS_VERSIONINFO`](https://learn.microsoft.com/en-us/windows/win32/menurc/vs-versioninfo) 
+/// resource structure representation.
 #[derive(Debug, Clone)]
 pub struct VersionInfo {
+    /// Associated [`Resource`]
     pub resource : Arc<Resource>,
+    /// Binary or text data type
     pub data_type : DataType,
+    /// resource key string (language code-page hex string)
     pub key : String,
+    /// VS_FIXEDFILEINFO representation.
+    /// [https://learn.microsoft.com/en-us/windows/win32/api/VerRsrc/ns-verrsrc-vs_fixedfileinfo](https://learn.microsoft.com/en-us/windows/win32/api/VerRsrc/ns-verrsrc-vs_fixedfileinfo)
     pub info : FileInfo,
+    /// VS_VERSIONINFO child structures. One or multiple of:
+    /// - [StringFileInfo](https://learn.microsoft.com/en-us/windows/win32/menurc/stringfileinfo)
+    /// - [VarFileInfo](https://learn.microsoft.com/en-us/windows/win32/menurc/varfileinfo)
     pub children : Vec<VersionInfoChild>,
 }
 

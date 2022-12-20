@@ -10,6 +10,10 @@ use crate::version::*;
 use crate::id::*;
 
 pub mod resource_type {
+    //!
+    //! List of resource constants representing Windows resource types
+    //! expressed as [`Id`]
+    //! 
     use super::Id;
     pub const UNKNOWN: Id = Id::Integer(0);
     pub const ACCELERATOR: Id = Id::Integer(9);
@@ -32,11 +36,13 @@ pub mod resource_type {
 }
 
 
+/// Placeholder for future data serialization (not implementated)
 #[derive(Debug, Clone)]
 pub struct ResourceDataInner {
     // ...
 }
 
+/// Placeholder for future data serialization (not implementated)
 #[derive(Debug, Clone)]
 pub enum ResourceData {
     Accelerator(ResourceDataInner),
@@ -59,13 +65,20 @@ pub enum ResourceData {
     Unknown(ResourceDataInner),
 }
 
+/// Structure representing a single resource
 #[derive(Clone)]
 pub struct Resource {
+    /// resource type
     pub kind : Id,
+    /// resource name
     pub name : Id,
+    /// `u16` language associated with the resource
     pub lang : u16,
+    /// raw resource data
     pub encoded : Arc<Mutex<Vec<u8>>>,
+    /// destructured resource data (not implemented)
     pub decoded : Arc<Mutex<Option<ResourceData>>>,
+    /// reference to the module handle that owns the resource
     module_handle : Arc<Mutex<Option<HANDLE>>>,
 }
 
@@ -104,6 +117,7 @@ impl Resource {
         info
     }
 
+    /// Remove resource from the associated module (deletes the resource)
     pub fn remove(&self) -> Result<&Self> {
         if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
             let success = unsafe { UpdateResourceA(
@@ -126,6 +140,10 @@ impl Resource {
         Ok(self)
         
     }
+
+    /// Replace raw resource data with a user-supplied data. This only replaces
+    /// the data in the resource structure. You must call [`Resource::update()`]
+    /// following this call to update the resoruce data in the actual module.
     pub fn replace(&self, data : &[u8]) -> Result<&Self> {
         *self.encoded.lock().unwrap() = data.to_vec();
         Ok(self)
@@ -158,13 +176,15 @@ impl Resource {
 
 }
 
+/// Data structure representing a resource file. This data structure 
+/// points to a `.res` or `.exe` file and allows loading and modifying
+/// resource in this file.
 #[derive(Debug)]
 pub struct Resources {
     file : PathBuf,
     module_handle : Arc<Mutex<Option<HANDLE>>>,
+    /// resources contained in the supplied file represented by the [`Resource`] data structure.
     pub list : Arc<Mutex<Vec<Arc<Resource>>>>,
-    // handle : Option<HANDLE>,
-    // pub list : Vec<Resource>,
 }
 
 impl Resources {
@@ -177,6 +197,9 @@ impl Resources {
         }
     }
 
+    /// Load resources from the resource file.  This function does not need to be called
+    /// explicitly as [`Resources::open`] will call it. It is useful if you want to load
+    /// resources for extraction purposes only.
     pub fn load(&self) -> Result<()> {
 
         unsafe {
@@ -204,15 +227,19 @@ impl Resources {
         Ok(())
     }
 
+    /// returns `true` if the resource file is currently open
     pub fn is_open(&self) -> bool {
-        // self.handle.is_some()
         self.module_handle.lock().unwrap().is_some()
     }
 
+    /// Open the resource file. This function opens a Windows handle to 
+    /// the resource file and must be followed by [`Resources::close`].
     pub fn open(&mut self) -> Result<&Self> {
         self.open_impl(false)
     }
 
+    /// Opens the resource file with `delete_existing_resources` set to `true`.
+    /// This will result in retention in a deletion of previously existing resources.
     pub fn open_delete_existing_resources(&mut self) -> Result<&Self> {
         self.open_impl(true)
     }
@@ -236,11 +263,17 @@ impl Resources {
         Ok(self)
     }
 
+    /// Remove the supplied resource from the resource file.
     pub fn remove(&self, resource: &Resource) -> Result<&Self> {
         self.remove_with_args(&resource.kind, &resource.name, resource.lang)?;
         Ok(self)
     }
 
+    /// Remove the resource from the resource file by specifying resource type, name and lang.
+    /// WARNING: If this method fails, the entire update set may fail (this is true for any API calls). 
+    /// As such it is highly recommended to use [`Resources::remove`] instead and supplying and existing 
+    /// [`Resource`] struct as it ensures that all supplied information is correct.
+    /// This method is provided for advanced usage only.
     pub fn remove_with_args(&self, kind : &Id, name : &Id, lang : u16) -> Result<&Self> {
         // if let Some(handle) = self.handle.lock().unwrap().as_ref() {
         if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
@@ -265,11 +298,16 @@ impl Resources {
         
     }
 
+    /// Replace (Update) the resource in the resource file. It is expected that this is the
+    /// original resource with the modified raw data.
     pub fn try_replace(&self, resource: &Resource) -> Result<&Self> {
         self.replace_with_args(&resource.kind, &resource.name, resource.lang, &resource.encoded.lock().unwrap())?;
         Ok(self)
     }
 
+    /// Replace (Update) the resource in the resource file by supplying the resource type, name and lang
+    /// as well as a `u8` slice containing the raw resource data.  Please note that if this function fails
+    /// the entire resoruce update set may fail.
     pub fn replace_with_args(&self, kind : &Id, name : &Id, lang : u16, data : &[u8]) -> Result<&Self> {
         if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
             let success = unsafe { UpdateResourceA(
@@ -293,6 +331,7 @@ impl Resources {
         
     }
 
+    /// Close the resource file.  This applies all the changes (updates) to the resource file.
     pub fn close(&mut self) {
         if let Some(handle) = self.module_handle.lock().unwrap().take() {
             unsafe {
@@ -301,6 +340,7 @@ impl Resources {
         }
     }
 
+    /// Close the resource file discarding all changes.
     pub fn discard(&mut self) {
         if let Some(handle) = self.module_handle.lock().unwrap().take() {
             unsafe {
@@ -309,11 +349,14 @@ impl Resources {
         }
     }
 
-    // pub fn 
+    /// Create a new resource entry in the resource file. This function
+    /// expects a valid [`Resource`] structure containing an appropriate
+    /// resource type, name and raw data.
     pub fn insert(&self, r : Resource) {
         self.list.lock().unwrap().push(Arc::new(r))
     }
 
+    /// Locate a resource entry by type and name.
     pub fn find(&self, typeid : Id, nameid: Id) -> Option<Arc<Resource>> {
         for item in self.list.lock().unwrap().iter() {
             if item.kind == typeid && item.name == nameid {
@@ -324,11 +367,10 @@ impl Resources {
         return None;
     }
 
+    /// Locate and deserialize VS_VERSIONINFO structure (represented by [`VersionInfo`]).
     pub fn get_version_info(&self) -> Result<Option<VersionInfo>> {
-        // let mut verinfo_resource = resources.find(16.into(),1.into()).expect("unable to find verinfo");
         for item in self.list.lock().unwrap().iter() {
             if item.kind == resource_type::VERSION {
-                // let verinfo = VersionInfo::try_from(item.encoded.lock().unwrap().as_slice())?;
                 return Ok(Some(item.clone().try_into()?));
             }
         }
@@ -343,7 +385,7 @@ impl Drop for Resources {
     }
 }
 
-pub unsafe extern "system" fn enum_languages(hmodule: HINSTANCE, lptype: PCSTR, lpname: PCSTR, lang: u16, lparam: isize) -> BOOL {
+unsafe extern "system" fn enum_languages(hmodule: HINSTANCE, lptype: PCSTR, lpname: PCSTR, lang: u16, lparam: isize) -> BOOL {
     let rptr : *const Resources = std::mem::transmute(lparam);
     let hresinfo = match FindResourceExA(hmodule,lptype,lpname,lang) {
         Ok(hresinfo) => hresinfo,
@@ -358,12 +400,12 @@ pub unsafe extern "system" fn enum_languages(hmodule: HINSTANCE, lptype: PCSTR, 
     BOOL(1)
 }
 
-pub unsafe extern "system" fn enum_names(hmodule: HINSTANCE, lptype: PCSTR, lpname: PCSTR, lparam: isize) -> BOOL {
+unsafe extern "system" fn enum_names(hmodule: HINSTANCE, lptype: PCSTR, lpname: PCSTR, lparam: isize) -> BOOL {
     EnumResourceLanguagesA(hmodule,lptype,lpname,Some(enum_languages),lparam);
     BOOL(1)
 }
 
-pub unsafe extern "system" fn enum_types(hmodule: HINSTANCE, lptype: PCSTR, lparam: isize) -> BOOL {
+unsafe extern "system" fn enum_types(hmodule: HINSTANCE, lptype: PCSTR, lparam: isize) -> BOOL {
     EnumResourceNamesA(hmodule,lptype,Some(enum_names),lparam);
     BOOL(1)
 }

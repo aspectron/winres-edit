@@ -1,5 +1,9 @@
 //!
-//! // This crate allows you to load and modify Windows resources inside of `.exe` and `.res` files.  This crate currently does not support actual resource data destructuring with exception of Version Strings (VS_VERSION_INFO), which is useful to modify application manifests. Loaded resources are available as raw `Vec<u8>` data, useful to modify bitmaps and icons.
+//! This crate allows you to load and modify Windows resources inside of `.exe` 
+//! and `.res` files.  This crate currently does not support actual resource
+//! data destructuring with exception of Version Strings (VS_VERSIONINFO), 
+//! which is useful to modify application manifests. Loaded resources are 
+//! available as raw `Vec<u8>` data, useful to modify bitmaps and icons.
 //! 
 //! ### Example
 //! 

@@ -1,35 +1,39 @@
-#[macro_export]
-macro_rules! pcstr {
-    ($s:expr) => {
-        PCSTR::from_raw(format!("{}\0",$s).as_ptr())
-    };
-}
-pub use pcstr;
 use windows::{
-    // Win32::System::Diagnostics::Debug::*, 
     Win32::Foundation::{WIN32_ERROR, GetLastError}, 
 };
 
-pub fn get_last_error() -> WIN32_ERROR {
+/// Convert a string to a zero-terminated [`windows::core::PCSTR`] string.
+#[macro_export]
+macro_rules! pcstr {
+    ($s:expr) => {
+        windows::core::PCSTR::from_raw(format!("{}\0",$s).as_ptr())
+    };
+}
+pub(crate) use pcstr;
+
+/// Get last windows error code
+pub(crate) fn get_last_error() -> WIN32_ERROR {
     unsafe { GetLastError() }
 }
 
+// /// Convert utf16 string to a zero-terminated `Vec<u16>`
+// pub fn utf16sz_to_u16vec(text: &String) -> Vec<u16> {
+//     let len = text.len()+1;
+//     let mut vec: Vec<u16> = Vec::with_capacity(len);
+//     vec.resize(len,0);
+//     for c in text.chars() {
+//         // TODO - proper encoding
+//         // let buf = [0;2];
+//         // c.encode_utf16(&mut buf);
+//         vec.push(c as u16);
+//     }
+//     vec.push(0);
+//     vec
+// }
 
-pub fn utf16sz_to_u16vec(text: &String) -> Vec<u16> {
-    let len = text.len()+1;
-    let mut vec: Vec<u16> = Vec::with_capacity(len);
-    vec.resize(len,0);
-    for c in text.chars() {
-        // TODO - proper encoding
-        // let buf = [0;2];
-        // c.encode_utf16(&mut buf);
-        vec.push(c as u16);
-    }
-    vec.push(0);
-    vec
-}
-
-pub fn utf16sz_to_u8vec(text: &String) -> Vec<u8> {
+/// This function convers a string to a zero-terminated
+/// `u16` unicode string represented by a `Vec<u8>` buffer.
+pub(crate) fn string_to_u8vec_sz(text: &String) -> Vec<u8> {
     let len = text.len()+1;
     let mut u16vec: Vec<u16> = Vec::with_capacity(len);
     // u16vec.resize(len,0);
@@ -49,7 +53,8 @@ pub fn utf16sz_to_u8vec(text: &String) -> Vec<u8> {
     u8vec
 }
 
-pub fn u32slice_to_u8vec(u32slice: &[u32]) -> Vec<u8> {
+/// Convert `u32` (DWORD) slice to a `Vec<u8>` buffer. 
+pub(crate) fn u32slice_to_u8vec(u32slice: &[u32]) -> Vec<u8> {
     let len = u32slice.len()*4;
     let mut u8vec = Vec::with_capacity(len);
     u8vec.resize(len,0);
