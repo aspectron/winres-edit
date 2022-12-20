@@ -33,13 +33,15 @@
 //! resources.close();
 //! ```
 //! 
-mod result;
+
 mod error;
-pub use error::*;
-mod version;
-pub use version::*;
+mod result;
 mod id;
-pub use id::*;
 mod resources;
-pub use resources::*;
+mod version;
 mod utils;
+
+pub use error::*;
+pub use id::*;
+pub use resources::*;
+pub use version::*;
