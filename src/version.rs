@@ -7,6 +7,8 @@ use crate::utils::*;
 use std::fmt;
 use crate::resources::Resource;
 
+/// Helper representing structure data header used in 
+/// `VS_VERSIONINFO` and all related data structures
 #[derive(Debug)]
 pub struct Header {
     pub length : usize,
