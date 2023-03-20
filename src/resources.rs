@@ -200,7 +200,7 @@ pub struct Resources {
 
 impl Resources {
     /// Create new instance of the resource manager bound to a specific resource file.
-    /// Once created, the resource file should be opened using [`open()`] or [`load()`].
+    /// Once created, the resource file should be opened using [`Resources::open()`] or [`Resources::load()`].
     pub fn new(file: &Path) -> Resources {
         Resources {
             file: file.to_path_buf(),

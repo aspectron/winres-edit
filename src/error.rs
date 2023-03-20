@@ -1,7 +1,12 @@
+//!
+//! Errors produced by this crate.
+//!
+
 use manual_serializer::Error as SerializerError;
 use std::string::FromUtf16Error;
 use thiserror::Error;
 
+/// Errors produced by this crate.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Error: {0}")]
