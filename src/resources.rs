@@ -97,12 +97,13 @@ impl std::fmt::Debug for Resource {
 }
 
 impl Resource {
+    /// Create a new resource instance bound to the [`Resources`] resource manager.
     pub fn new(
+        resources : &Resources,
         rtype : PCSTR,
         rname: PCSTR,
         rlang: u16,
         data : &[u8],
-        module_handle : Arc<Mutex<Option<HANDLE>>>,
     ) -> Resource {
         let typeid : Id = rtype.into();
         let info = Resource {
@@ -111,7 +112,7 @@ impl Resource {
             lang: rlang,
             encoded : Arc::new(Mutex::new(data.to_vec())),
             decoded : Arc::new(Mutex::new(None)),
-            module_handle
+            module_handle : resources.module_handle(),
         };
 
         info
@@ -149,6 +150,7 @@ impl Resource {
         Ok(self)
     }
 
+    /// Store this resource in the resource module (creates new or updates)
     pub fn update(&self) -> Result<&Self> {
         
         if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
@@ -171,7 +173,6 @@ impl Resource {
         };
 
         Ok(self)
-        
     }
 
 }
@@ -189,6 +190,8 @@ pub struct Resources {
 
 impl Resources {
 
+    /// Create new instance of the resource manager bound to a specific resource file.
+    /// Once created, the resource file should be opened using [`open()`] or [`load()`].
     pub fn new(file: &PathBuf) -> Resources {
         Resources {
             file : file.clone(),
@@ -225,6 +228,10 @@ impl Resources {
         }
 
         Ok(())
+    }
+
+    pub fn module_handle(&self) -> Arc<Mutex<Option<HANDLE>>> {
+        self.module_handle.clone()
     }
 
     /// returns `true` if the resource file is currently open
@@ -320,7 +327,7 @@ impl Resources {
             ).as_bool() };
 
             if !success {
-                return Err(format!("Resources::load(): Error removing resources: {:?}",get_last_error()).into());
+                return Err(format!("Resources::load(): Error updating resources: {:?}",get_last_error()).into());
             } 
 
         } else {
@@ -396,7 +403,7 @@ unsafe extern "system" fn enum_languages(hmodule: HINSTANCE, lptype: PCSTR, lpna
     let data_ptr = LockResource(resource);
     let data = std::slice::from_raw_parts(std::mem::transmute(data_ptr) , len as usize);
     let resources = &*rptr;
-    resources.insert(Resource::new(lptype,lpname,lang,data, resources.module_handle.clone()));
+    resources.insert(Resource::new(resources,lptype,lpname,lang,data));
     BOOL(1)
 }
 

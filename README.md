@@ -11,6 +11,7 @@ This crate allows you to load and modify Windows resources inside of `.exe` and 
 
 ### Example
 
+#### Modifying icon data and resource strings
 ```rust
 let mut resources = Resources::new(&Path::new("myfile.exe"));
 resources.load().expect("Unable to load resources");
@@ -34,7 +35,19 @@ resources.get_version_info()?.expect("Unable to get version info")
     .remove_string("SomeExistingString")
     .update()?;
 
+// make sure to explicitly call close as that flushes all the session changes
 resources.close();
+```
+
+#### Adding a new icon
+```rust
+let res = Resource::new(
+    &resources,
+    resource_type::ICON.into(),
+    Id::Integer(14).into(),
+    1033,
+    target_icon.data(),
+);
 ```
 
 ### Icons
@@ -55,5 +68,3 @@ let icon_data = target_icon.data();
 ```
 
 This crate also works well in conjunction with the [`image`](https://crates.io/image) crate that can interact with the [`ico`](https://crates.io/crates/ico) crate to load, resize and and store custom icons within resource files.
-
-
