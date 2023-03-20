@@ -2,6 +2,7 @@ use crate::id::*;
 use crate::result::*;
 use crate::utils::*;
 use crate::version::*;
+use std::path::Path;
 use std::{
     fmt,
     path::PathBuf,
@@ -108,16 +109,14 @@ impl Resource {
         data: &[u8],
     ) -> Resource {
         let typeid: Id = rtype.into();
-        let info = Resource {
+        Resource {
             kind: typeid,
             name: rname.into(),
             lang: rlang,
             encoded: Arc::new(Mutex::new(data.to_vec())),
             decoded: Arc::new(Mutex::new(None)),
             module_handle: resources.module_handle(),
-        };
-
-        info
+        }
     }
 
     /// Remove resource from the associated module (deletes the resource)
@@ -143,7 +142,7 @@ impl Resource {
                 .into());
             }
         } else {
-            return Err(format!("Resource::replace(): resource file is not open").into());
+            return Err("Resource::replace(): resource file is not open".into());
         };
 
         Ok(self)
@@ -181,7 +180,7 @@ impl Resource {
                 .into());
             }
         } else {
-            return Err(format!("Resource::replace(): resource file is not open").into());
+            return Err("Resource::replace(): resource file is not open".into());
         };
 
         Ok(self)
@@ -202,9 +201,9 @@ pub struct Resources {
 impl Resources {
     /// Create new instance of the resource manager bound to a specific resource file.
     /// Once created, the resource file should be opened using [`open()`] or [`load()`].
-    pub fn new(file: &PathBuf) -> Resources {
+    pub fn new(file: &Path) -> Resources {
         Resources {
-            file: file.clone(),
+            file: file.to_path_buf(),
             module_handle: Arc::new(Mutex::new(None)),
             list: Arc::new(Mutex::new(Vec::new())),
         }
@@ -393,7 +392,7 @@ impl Resources {
             }
         }
 
-        return None;
+        None
     }
 
     /// Locate and deserialize VS_VERSIONINFO structure (represented by [`VersionInfo`]).
@@ -424,10 +423,7 @@ unsafe extern "system" fn enum_languages(
     let rptr: *const Resources = std::mem::transmute(lparam);
     let hresinfo = match FindResourceExA(hmodule, lptype, lpname, lang) {
         Ok(hresinfo) => hresinfo,
-        Err(e) => panic!(
-            "Unable to find resource {:?} {:?} {:?} {lang}: {e}",
-            hmodule, lptype, lpname
-        ),
+        Err(e) => panic!("Unable to find resource {hmodule:?} {lptype:?} {lpname:?} {lang}: {e}"),
     };
     let resource = LoadResource(hmodule, hresinfo);
     let len = SizeofResource(hmodule, hresinfo);

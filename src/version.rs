@@ -65,7 +65,7 @@ impl TryDeserialize for Header {
         let data_type = match data_type {
             0 => DataType::Binary,
             1 => DataType::Text,
-            _ => return Err(format!("Header::try_deserealize(): invalid resource data type (must be 1 or 0) - possible misalignment/corruption").into())
+            _ => return Err("Header::try_deserealize(): invalid resource data type (must be 1 or 0) - possible misalignment/corruption".into())
         };
         let key = src.try_load_utf16le_sz()?;
 
@@ -105,14 +105,8 @@ fn try_build_struct(
 /// This version struct is helpful for serialization and
 /// deserialization of the versions packed into a `u64` value
 /// represented as 2 LE-encoded `u32` (DWORD) values.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Version([u16; 4]);
-
-impl Default for Version {
-    fn default() -> Self {
-        Version([0, 0, 0, 0])
-    }
-}
 
 impl TryDeserialize for Version {
     type Error = Error;
@@ -150,14 +144,8 @@ impl fmt::Display for Version {
 
 /// Date helper used for serializing and deserializing 2 LE-encoded u32
 /// values into a single `u64` value.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Date(u64);
-
-impl Default for Date {
-    fn default() -> Self {
-        Date(0)
-    }
-}
 
 impl TryDeserialize for Date {
     type Error = Error;
@@ -508,15 +496,12 @@ impl VersionInfo {
 
     pub fn replace_string(&mut self, key: &str, text: &str) -> &mut Self {
         for child in self.children.iter_mut() {
-            match child {
-                VersionInfoChild::StringFileInfo { tables } => {
-                    for (_, table) in tables {
-                        if let Some(_) = table.get(key) {
-                            table.insert(key.to_string(), Data::Text(text.to_string()));
-                        }
+            if let VersionInfoChild::StringFileInfo { tables } = child {
+                for table in tables.values_mut() {
+                    if table.get(key).is_some() {
+                        table.insert(key.to_string(), Data::Text(text.to_string()));
                     }
                 }
-                _ => {}
             }
         }
         self
@@ -524,13 +509,10 @@ impl VersionInfo {
 
     pub fn insert_string(&mut self, key: &str, text: &str) -> &mut Self {
         for child in self.children.iter_mut() {
-            match child {
-                VersionInfoChild::StringFileInfo { tables } => {
-                    for (_, table) in tables {
-                        table.insert(key.to_string(), Data::Text(text.to_string()));
-                    }
+            if let VersionInfoChild::StringFileInfo { tables } = child {
+                for table in tables.values_mut() {
+                    table.insert(key.to_string(), Data::Text(text.to_string()));
                 }
-                _ => {}
             }
         }
         self
@@ -538,15 +520,12 @@ impl VersionInfo {
 
     pub fn insert_strings(&mut self, tuples: &[(&str, &str)]) -> &mut Self {
         for child in self.children.iter_mut() {
-            match child {
-                VersionInfoChild::StringFileInfo { tables } => {
-                    for (_, table) in tables {
-                        for (key, text) in tuples {
-                            table.insert(key.to_string(), Data::Text(text.to_string()));
-                        }
+            if let VersionInfoChild::StringFileInfo { tables } = child {
+                for table in tables.values_mut() {
+                    for (key, text) in tuples {
+                        table.insert(key.to_string(), Data::Text(text.to_string()));
                     }
                 }
-                _ => {}
             }
         }
         self
@@ -554,13 +533,10 @@ impl VersionInfo {
 
     pub fn remove_string(&mut self, key: &str) -> &mut Self {
         for child in self.children.iter_mut() {
-            match child {
-                VersionInfoChild::StringFileInfo { tables } => {
-                    for (_, table) in tables {
-                        table.remove(key);
-                    }
+            if let VersionInfoChild::StringFileInfo { tables } = child {
+                for table in tables.values_mut() {
+                    table.remove(key);
                 }
-                _ => {}
             }
         }
         self
@@ -568,13 +544,10 @@ impl VersionInfo {
 
     pub fn ensure_language(&mut self, lang: &str) -> &mut Self {
         for child in self.children.iter_mut() {
-            match child {
-                VersionInfoChild::StringFileInfo { tables } => {
-                    if tables.get(lang).is_none() {
-                        tables.insert(lang.to_string(), HashMap::new());
-                    }
+            if let VersionInfoChild::StringFileInfo { tables } = child {
+                if tables.get(lang).is_none() {
+                    tables.insert(lang.to_string(), HashMap::new());
                 }
-                _ => {}
             }
         }
         self

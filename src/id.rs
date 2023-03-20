@@ -27,7 +27,7 @@ impl From<PCSTR> for Id {
 /// Convert a `u16` value to an `Id`
 impl From<u16> for Id {
     fn from(v: u16) -> Self {
-        Id::Integer(v as u16)
+        Id::Integer(v)
     }
 }
 

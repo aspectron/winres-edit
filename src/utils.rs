@@ -43,8 +43,7 @@ pub(crate) fn string_to_u8vec_sz(text: &String) -> Vec<u8> {
     }
     u16vec.push(0);
     let len = len * 2;
-    let mut u8vec = Vec::with_capacity(len);
-    u8vec.resize(len, 0);
+    let mut u8vec = vec![0; len];
     let src = unsafe { std::mem::transmute(u16vec.as_ptr()) };
     let dest = u8vec[0..].as_mut_ptr();
     unsafe {
@@ -56,8 +55,7 @@ pub(crate) fn string_to_u8vec_sz(text: &String) -> Vec<u8> {
 /// Convert `u32` (DWORD) slice to a `Vec<u8>` buffer.
 pub(crate) fn u32slice_to_u8vec(u32slice: &[u32]) -> Vec<u8> {
     let len = u32slice.len() * 4;
-    let mut u8vec = Vec::with_capacity(len);
-    u8vec.resize(len, 0);
+    let mut u8vec = vec![0; len];
     let src = unsafe { std::mem::transmute(u32slice.as_ptr()) };
     let dest = u8vec[0..].as_mut_ptr();
     unsafe {
