@@ -1,12 +1,10 @@
-use windows::{
-    Win32::Foundation::{WIN32_ERROR, GetLastError}, 
-};
+use windows::Win32::Foundation::{GetLastError, WIN32_ERROR};
 
 /// Convert a string to a zero-terminated [`windows::core::PCSTR`] string.
 #[macro_export]
 macro_rules! pcstr {
     ($s:expr) => {
-        windows::core::PCSTR::from_raw(format!("{}\0",$s).as_ptr())
+        windows::core::PCSTR::from_raw(format!("{}\0", $s).as_ptr())
     };
 }
 pub(crate) use pcstr;
@@ -34,7 +32,7 @@ pub(crate) fn get_last_error() -> WIN32_ERROR {
 /// This function convers a string to a zero-terminated
 /// `u16` unicode string represented by a `Vec<u8>` buffer.
 pub(crate) fn string_to_u8vec_sz(text: &String) -> Vec<u8> {
-    let len = text.len()+1;
+    let len = text.len() + 1;
     let mut u16vec: Vec<u16> = Vec::with_capacity(len);
     // u16vec.resize(len,0);
     for c in text.chars() {
@@ -44,23 +42,26 @@ pub(crate) fn string_to_u8vec_sz(text: &String) -> Vec<u8> {
         u16vec.push(c as u16);
     }
     u16vec.push(0);
-    let len = len*2;
+    let len = len * 2;
     let mut u8vec = Vec::with_capacity(len);
-    u8vec.resize(len,0);
+    u8vec.resize(len, 0);
     let src = unsafe { std::mem::transmute(u16vec.as_ptr()) };
     let dest = u8vec[0..].as_mut_ptr();
-    unsafe { std::ptr::copy(src,dest,len); }
+    unsafe {
+        std::ptr::copy(src, dest, len);
+    }
     u8vec
 }
 
-/// Convert `u32` (DWORD) slice to a `Vec<u8>` buffer. 
+/// Convert `u32` (DWORD) slice to a `Vec<u8>` buffer.
 pub(crate) fn u32slice_to_u8vec(u32slice: &[u32]) -> Vec<u8> {
-    let len = u32slice.len()*4;
+    let len = u32slice.len() * 4;
     let mut u8vec = Vec::with_capacity(len);
-    u8vec.resize(len,0);
+    u8vec.resize(len, 0);
     let src = unsafe { std::mem::transmute(u32slice.as_ptr()) };
     let dest = u8vec[0..].as_mut_ptr();
-    unsafe { std::ptr::copy(src,dest,len); }
+    unsafe {
+        std::ptr::copy(src, dest, len);
+    }
     u8vec
 }
-

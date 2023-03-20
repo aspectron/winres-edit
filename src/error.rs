@@ -1,6 +1,6 @@
+use manual_serializer::Error as SerializerError;
 use std::string::FromUtf16Error;
 use thiserror::Error;
-use manual_serializer::Error as SerializerError;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -12,7 +12,7 @@ pub enum Error {
 
     #[error("{0}")]
     SerializerError(#[from] SerializerError),
-    
+
     #[error("{0}")]
     Win32Error(::windows::core::Error),
 }

@@ -1,19 +1,23 @@
-use std::{fmt, path::PathBuf, sync::{Arc, Mutex}};
+use crate::id::*;
+use crate::result::*;
+use crate::utils::*;
+use crate::version::*;
+use std::{
+    fmt,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use windows::{
     core::PCSTR,
-    Win32::Foundation::{HANDLE,HINSTANCE,BOOL}, 
-    Win32::System::LibraryLoader::*, 
+    Win32::Foundation::{BOOL, HANDLE, HINSTANCE},
+    Win32::System::LibraryLoader::*,
 };
-use crate::utils::*;
-use crate::result::*;
-use crate::version::*;
-use crate::id::*;
 
 pub mod resource_type {
     //!
     //! List of resource constants representing Windows resource types
     //! expressed as [`Id`]
-    //! 
+    //!
     use super::Id;
     pub const UNKNOWN: Id = Id::Integer(0);
     pub const ACCELERATOR: Id = Id::Integer(9);
@@ -34,7 +38,6 @@ pub mod resource_type {
     pub const VERSION: Id = Id::Integer(16);
     pub const VXD: Id = Id::Integer(20);
 }
-
 
 /// Placeholder for future data serialization (not implementated)
 #[derive(Debug, Clone)]
@@ -69,27 +72,26 @@ pub enum ResourceData {
 #[derive(Clone)]
 pub struct Resource {
     /// resource type
-    pub kind : Id,
+    pub kind: Id,
     /// resource name
-    pub name : Id,
+    pub name: Id,
     /// `u16` language associated with the resource
-    pub lang : u16,
+    pub lang: u16,
     /// raw resource data
-    pub encoded : Arc<Mutex<Vec<u8>>>,
+    pub encoded: Arc<Mutex<Vec<u8>>>,
     /// destructured resource data (not implemented)
-    pub decoded : Arc<Mutex<Option<ResourceData>>>,
+    pub decoded: Arc<Mutex<Option<ResourceData>>>,
     /// reference to the module handle that owns the resource
-    module_handle : Arc<Mutex<Option<HANDLE>>>,
+    module_handle: Arc<Mutex<Option<HANDLE>>>,
 }
 
 impl std::fmt::Debug for Resource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-
         f.debug_struct("")
-            .field("kind",&self.kind)
-            .field("name",&self.name)
-            .field("lang",&self.lang)
-            .field("data len",&self.encoded.lock().unwrap().len())
+            .field("kind", &self.kind)
+            .field("name", &self.name)
+            .field("lang", &self.lang)
+            .field("data len", &self.encoded.lock().unwrap().len())
             // .field("resource",&self.decoded)
             //  .field("resource",&format!("{:?}",self.resource))
             .finish()
@@ -99,20 +101,20 @@ impl std::fmt::Debug for Resource {
 impl Resource {
     /// Create a new resource instance bound to the [`Resources`] resource manager.
     pub fn new(
-        resources : &Resources,
-        rtype : PCSTR,
+        resources: &Resources,
+        rtype: PCSTR,
         rname: PCSTR,
         rlang: u16,
-        data : &[u8],
+        data: &[u8],
     ) -> Resource {
-        let typeid : Id = rtype.into();
+        let typeid: Id = rtype.into();
         let info = Resource {
-            kind : typeid,
-            name : rname.into(),
+            kind: typeid,
+            name: rname.into(),
             lang: rlang,
-            encoded : Arc::new(Mutex::new(data.to_vec())),
-            decoded : Arc::new(Mutex::new(None)),
-            module_handle : resources.module_handle(),
+            encoded: Arc::new(Mutex::new(data.to_vec())),
+            decoded: Arc::new(Mutex::new(None)),
+            module_handle: resources.module_handle(),
         };
 
         info
@@ -121,82 +123,90 @@ impl Resource {
     /// Remove resource from the associated module (deletes the resource)
     pub fn remove(&self) -> Result<&Self> {
         if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
-            let success = unsafe { UpdateResourceA(
-                *handle,
-                self.kind.clone(),
-                self.name.clone(),
-                self.lang,
-                None,
-                0
-            ).as_bool() };
+            let success = unsafe {
+                UpdateResourceA(
+                    *handle,
+                    self.kind.clone(),
+                    self.name.clone(),
+                    self.lang,
+                    None,
+                    0,
+                )
+                .as_bool()
+            };
 
             if !success {
-                return Err(format!("Resources::load(): Error removing resources: {:?}",get_last_error()).into());
-            } 
-
+                return Err(format!(
+                    "Resources::load(): Error removing resources: {:?}",
+                    get_last_error()
+                )
+                .into());
+            }
         } else {
             return Err(format!("Resource::replace(): resource file is not open").into());
         };
 
         Ok(self)
-        
     }
 
     /// Replace raw resource data with a user-supplied data. This only replaces
     /// the data in the resource structure. You must call [`Resource::update()`]
     /// following this call to update the resoruce data in the actual module.
-    pub fn replace(&self, data : &[u8]) -> Result<&Self> {
+    pub fn replace(&self, data: &[u8]) -> Result<&Self> {
         *self.encoded.lock().unwrap() = data.to_vec();
         Ok(self)
     }
 
     /// Store this resource in the resource module (creates new or updates)
     pub fn update(&self) -> Result<&Self> {
-        
         if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
             let encoded = self.encoded.lock().unwrap();
-            let success = unsafe { UpdateResourceA(
-                *handle,
-                self.kind.clone(),
-                self.name.clone(),
-                self.lang,
-                Some(std::mem::transmute(encoded.as_ptr())),
-                encoded.len() as u32
-            ).as_bool() };
+            let success = unsafe {
+                UpdateResourceA(
+                    *handle,
+                    self.kind.clone(),
+                    self.name.clone(),
+                    self.lang,
+                    Some(std::mem::transmute(encoded.as_ptr())),
+                    encoded.len() as u32,
+                )
+                .as_bool()
+            };
 
             if !success {
-                return Err(format!("Resources::load(): Error removing resources: {:?}",get_last_error()).into());
-            } 
-
+                return Err(format!(
+                    "Resources::load(): Error removing resources: {:?}",
+                    get_last_error()
+                )
+                .into());
+            }
         } else {
             return Err(format!("Resource::replace(): resource file is not open").into());
         };
 
         Ok(self)
     }
-
 }
 
-/// Data structure representing a resource file. This data structure 
+/// Data structure representing a resource file. This data structure
 /// points to a `.res` or `.exe` file and allows loading and modifying
 /// resource in this file.
 #[derive(Debug)]
 pub struct Resources {
-    file : PathBuf,
-    module_handle : Arc<Mutex<Option<HANDLE>>>,
+    file: PathBuf,
+    module_handle: Arc<Mutex<Option<HANDLE>>>,
     /// resources contained in the supplied file represented by the [`Resource`] data structure.
-    pub list : Arc<Mutex<Vec<Arc<Resource>>>>,
+    pub list: Arc<Mutex<Vec<Arc<Resource>>>>,
 }
 
 impl Resources {
-
     /// Create new instance of the resource manager bound to a specific resource file.
     /// Once created, the resource file should be opened using [`open()`] or [`load()`].
     pub fn new(file: &PathBuf) -> Resources {
         Resources {
-            file : file.clone(),
-            module_handle : Arc::new(Mutex::new(None)),
-            list : Arc::new(Mutex::new(Vec::new()))
+            file: file.clone(),
+            module_handle: Arc::new(Mutex::new(None)),
+            list: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -204,27 +214,27 @@ impl Resources {
     /// explicitly as [`Resources::open`] will call it. It is useful if you want to load
     /// resources for extraction purposes only.
     pub fn load(&self) -> Result<()> {
-
         unsafe {
             let handle = LoadLibraryExA(
                 pcstr!(self.file.to_str().unwrap()),
                 None,
                 // LOAD_LIBRARY_FLAGS::default()
-                DONT_RESOLVE_DLL_REFERENCES | LOAD_LIBRARY_AS_DATAFILE
+                DONT_RESOLVE_DLL_REFERENCES | LOAD_LIBRARY_AS_DATAFILE,
             )?;
 
-            let ptr : *const Resources = std::mem::transmute(&*self);
-            let success = EnumResourceTypesA(
-                handle,
-                Some(enum_types),
-                std::mem::transmute(ptr)
-            ).as_bool();
+            let ptr: *const Resources = std::mem::transmute(&*self);
+            let success =
+                EnumResourceTypesA(handle, Some(enum_types), std::mem::transmute(ptr)).as_bool();
 
             FreeLibrary(handle);
 
             if !success {
-                return Err(format!("Resources::load(): Error enumerating resources: {:?}",get_last_error()).into());
-            } 
+                return Err(format!(
+                    "Resources::load(): Error enumerating resources: {:?}",
+                    get_last_error()
+                )
+                .into());
+            }
         }
 
         Ok(())
@@ -239,7 +249,7 @@ impl Resources {
         self.module_handle.lock().unwrap().is_some()
     }
 
-    /// Open the resource file. This function opens a Windows handle to 
+    /// Open the resource file. This function opens a Windows handle to
     /// the resource file and must be followed by [`Resources::close`].
     pub fn open(&mut self) -> Result<&Self> {
         self.open_impl(false)
@@ -253,7 +263,9 @@ impl Resources {
 
     fn open_impl(&mut self, delete_existing_resources: bool) -> Result<&Self> {
         if self.is_open() {
-            return Err(format!("resource '{}' is already open", self.file.to_str().unwrap()).into());
+            return Err(
+                format!("resource '{}' is already open", self.file.to_str().unwrap()).into(),
+            );
         }
 
         self.load()?;
@@ -261,12 +273,13 @@ impl Resources {
         let handle = unsafe {
             BeginUpdateResourceA(
                 pcstr!(self.file.to_str().unwrap()),
-                delete_existing_resources)?
+                delete_existing_resources,
+            )?
         };
 
         self.module_handle.lock().unwrap().replace(handle);
         // self.handle.lock().unwrap().replace(handle);
-        
+
         Ok(self)
     }
 
@@ -277,72 +290,81 @@ impl Resources {
     }
 
     /// Remove the resource from the resource file by specifying resource type, name and lang.
-    /// WARNING: If this method fails, the entire update set may fail (this is true for any API calls). 
-    /// As such it is highly recommended to use [`Resources::remove`] instead and supplying and existing 
+    /// WARNING: If this method fails, the entire update set may fail (this is true for any API calls).
+    /// As such it is highly recommended to use [`Resources::remove`] instead and supplying and existing
     /// [`Resource`] struct as it ensures that all supplied information is correct.
     /// This method is provided for advanced usage only.
-    pub fn remove_with_args(&self, kind : &Id, name : &Id, lang : u16) -> Result<&Self> {
+    pub fn remove_with_args(&self, kind: &Id, name: &Id, lang: u16) -> Result<&Self> {
         // if let Some(handle) = self.handle.lock().unwrap().as_ref() {
         if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
-            let success = unsafe { UpdateResourceA(
-                *handle,
-                kind,
-                name,
-                lang,
-                None,
-                0,
-            ).as_bool() };
+            let success = unsafe { UpdateResourceA(*handle, kind, name, lang, None, 0).as_bool() };
 
             if !success {
-                return Err(format!("Resources::load(): Error removing resources: {:?}",get_last_error()).into());
-            } 
-
+                return Err(format!(
+                    "Resources::load(): Error removing resources: {:?}",
+                    get_last_error()
+                )
+                .into());
+            }
         } else {
             return Err(format!("resource '{}' is not open", self.file.to_str().unwrap()).into());
         };
 
         Ok(self)
-        
     }
 
     /// Replace (Update) the resource in the resource file. It is expected that this is the
     /// original resource with the modified raw data.
     pub fn try_replace(&self, resource: &Resource) -> Result<&Self> {
-        self.replace_with_args(&resource.kind, &resource.name, resource.lang, &resource.encoded.lock().unwrap())?;
+        self.replace_with_args(
+            &resource.kind,
+            &resource.name,
+            resource.lang,
+            &resource.encoded.lock().unwrap(),
+        )?;
         Ok(self)
     }
 
     /// Replace (Update) the resource in the resource file by supplying the resource type, name and lang
     /// as well as a `u8` slice containing the raw resource data.  Please note that if this function fails
     /// the entire resoruce update set may fail.
-    pub fn replace_with_args(&self, kind : &Id, name : &Id, lang : u16, data : &[u8]) -> Result<&Self> {
+    pub fn replace_with_args(&self, kind: &Id, name: &Id, lang: u16, data: &[u8]) -> Result<&Self> {
         if let Some(handle) = self.module_handle.lock().unwrap().as_ref() {
-            let success = unsafe { UpdateResourceA(
-                *handle,
-                kind,
-                name,
-                lang,
-                Some(std::mem::transmute(data.as_ptr())),
-                data.len() as u32,
-            ).as_bool() };
+            let success = unsafe {
+                UpdateResourceA(
+                    *handle,
+                    kind,
+                    name,
+                    lang,
+                    Some(std::mem::transmute(data.as_ptr())),
+                    data.len() as u32,
+                )
+                .as_bool()
+            };
 
             if !success {
-                return Err(format!("Resources::load(): Error updating resources: {:?}",get_last_error()).into());
-            } 
-
+                return Err(format!(
+                    "Resources::load(): Error updating resources: {:?}",
+                    get_last_error()
+                )
+                .into());
+            }
         } else {
-            return Err(format!("resource file '{}' is not open", self.file.to_str().unwrap()).into());
+            return Err(format!(
+                "resource file '{}' is not open",
+                self.file.to_str().unwrap()
+            )
+            .into());
         };
 
         Ok(self)
-        
     }
 
     /// Close the resource file.  This applies all the changes (updates) to the resource file.
     pub fn close(&mut self) {
         if let Some(handle) = self.module_handle.lock().unwrap().take() {
             unsafe {
-                EndUpdateResourceA(handle,false);
+                EndUpdateResourceA(handle, false);
             };
         }
     }
@@ -351,7 +373,7 @@ impl Resources {
     pub fn discard(&mut self) {
         if let Some(handle) = self.module_handle.lock().unwrap().take() {
             unsafe {
-                EndUpdateResourceA(handle,true);
+                EndUpdateResourceA(handle, true);
             };
         }
     }
@@ -359,12 +381,12 @@ impl Resources {
     /// Create a new resource entry in the resource file. This function
     /// expects a valid [`Resource`] structure containing an appropriate
     /// resource type, name and raw data.
-    pub fn insert(&self, r : Resource) {
+    pub fn insert(&self, r: Resource) {
         self.list.lock().unwrap().push(Arc::new(r))
     }
 
     /// Locate a resource entry by type and name.
-    pub fn find(&self, typeid : Id, nameid: Id) -> Option<Arc<Resource>> {
+    pub fn find(&self, typeid: Id, nameid: Id) -> Option<Arc<Resource>> {
         for item in self.list.lock().unwrap().iter() {
             if item.kind == typeid && item.name == nameid {
                 return Some(item.clone());
@@ -392,29 +414,41 @@ impl Drop for Resources {
     }
 }
 
-unsafe extern "system" fn enum_languages(hmodule: HINSTANCE, lptype: PCSTR, lpname: PCSTR, lang: u16, lparam: isize) -> BOOL {
-    let rptr : *const Resources = std::mem::transmute(lparam);
-    let hresinfo = match FindResourceExA(hmodule,lptype,lpname,lang) {
+unsafe extern "system" fn enum_languages(
+    hmodule: HINSTANCE,
+    lptype: PCSTR,
+    lpname: PCSTR,
+    lang: u16,
+    lparam: isize,
+) -> BOOL {
+    let rptr: *const Resources = std::mem::transmute(lparam);
+    let hresinfo = match FindResourceExA(hmodule, lptype, lpname, lang) {
         Ok(hresinfo) => hresinfo,
-        Err(e) => panic!("Unable to find resource {:?} {:?} {:?} {lang}: {e}", hmodule,lptype,lpname)
+        Err(e) => panic!(
+            "Unable to find resource {:?} {:?} {:?} {lang}: {e}",
+            hmodule, lptype, lpname
+        ),
     };
-    let resource = LoadResource(hmodule,hresinfo);
-    let len = SizeofResource(hmodule,hresinfo);
+    let resource = LoadResource(hmodule, hresinfo);
+    let len = SizeofResource(hmodule, hresinfo);
     let data_ptr = LockResource(resource);
-    let data = std::slice::from_raw_parts(std::mem::transmute(data_ptr) , len as usize);
+    let data = std::slice::from_raw_parts(std::mem::transmute(data_ptr), len as usize);
     let resources = &*rptr;
-    resources.insert(Resource::new(resources,lptype,lpname,lang,data));
+    resources.insert(Resource::new(resources, lptype, lpname, lang, data));
     BOOL(1)
 }
 
-unsafe extern "system" fn enum_names(hmodule: HINSTANCE, lptype: PCSTR, lpname: PCSTR, lparam: isize) -> BOOL {
-    EnumResourceLanguagesA(hmodule,lptype,lpname,Some(enum_languages),lparam);
+unsafe extern "system" fn enum_names(
+    hmodule: HINSTANCE,
+    lptype: PCSTR,
+    lpname: PCSTR,
+    lparam: isize,
+) -> BOOL {
+    EnumResourceLanguagesA(hmodule, lptype, lpname, Some(enum_languages), lparam);
     BOOL(1)
 }
 
 unsafe extern "system" fn enum_types(hmodule: HINSTANCE, lptype: PCSTR, lparam: isize) -> BOOL {
-    EnumResourceNamesA(hmodule,lptype,Some(enum_names),lparam);
+    EnumResourceNamesA(hmodule, lptype, Some(enum_names), lparam);
     BOOL(1)
 }
-
-
